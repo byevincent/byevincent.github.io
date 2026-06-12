@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Debug Object Hijacking via Image File Execution Options (IFEO) for Persistence — byevincent</title>
+    <meta property="og:title" content="Debug Object Hijacking via Image File Execution Options (IFEO) for Persistence">
+    <meta property="og:description" content="Introduction Exploiting IFEO for Persistence Registry Location Debugger Value Abuse Alternate IFEO Values The Role of Debug Object Hijacking Registry Modification Process for IFEO Persistence Selecting a Target…">
+    <meta property="og:image" content="https://byevincent.xyz/img/2025/03/screenshot-from-2025-03-17-15-16-54.png">
+    <meta property="og:url" content="https://byevincent.xyz/posts/debug-object-hijacking-via-image-file-execution-options-ifeo-for-persistence/">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary_large_image">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+  </head>
+  <body>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="logo" href="/">byevincent</a>
+        <nav class="nav">
+          <div class="nav-links">
+            <a href="/">Blog</a>
+            <a href="/about/">About</a>
+          </div>
+          <button class="theme-toggle" aria-label="Toggle theme">
+            <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+            <span></span><span></span><span></span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="post-container">
+        <header class="post-header">
+          <h1>Debug Object Hijacking via Image File Execution Options (IFEO) for Persistence</h1>
+          <div class="meta">By <strong>Vincent Dinh</strong> &bull; <time datetime="2025-03-14">Mar 14, 2025</time> &bull; <span class="tag">Malware</span></div>
+        </header>
+        <article class="post-article">
+
+          
+<figure><img alt="" src="/img/2025/03/2.1.png" style="width:469px;height:auto"/></figure>
+<ol><li><a class="wp-block-table-of-contents__entry" href="#introduction">Introduction</a><ol><li><a class="wp-block-table-of-contents__entry" href="#exploiting-ifeo-for-persistence">Exploiting IFEO for Persistence</a><ol><li><a class="wp-block-table-of-contents__entry" href="#registry-location">Registry Location</a></li><li><a class="wp-block-table-of-contents__entry" href="#debugger-value-abuse">Debugger Value Abuse</a></li><li><a class="wp-block-table-of-contents__entry" href="#alternate-ifeo-values">Alternate IFEO Values</a></li></ol></li><li><a class="wp-block-table-of-contents__entry" href="#the-role-of-debug-object-hijacking">The Role of Debug Object Hijacking</a></li><li><a class="wp-block-table-of-contents__entry" href="#registry-modification-process-for-ifeo-persistence">Registry Modification Process for IFEO Persistence</a><ol><li><a class="wp-block-table-of-contents__entry" href="#selecting-a-target-executable">Selecting a Target Executable</a></li><li><a class="wp-block-table-of-contents__entry" href="#modifying-the-ifeo-registry-key">Modifying the IFEO Registry Key</a></li><li><a class="wp-block-table-of-contents__entry" href="#alternate-ifeo-abuses">Alternate IFEO Abuses</a></li></ol></li><li><a class="wp-block-table-of-contents__entry" href="#detection-techniques-and-forensic-analysis">Detection Techniques and Forensic Analysis</a><ol><li><a class="wp-block-table-of-contents__entry" href="#registry-inspection">Registry Inspection</a><ol><li><a class="wp-block-table-of-contents__entry" href="#baselining">Baselining</a></li><li><a class="wp-block-table-of-contents__entry" href="#unexpected-parent-child-relationships">Unexpected Parent-Child Relationships </a></li><li><a class="wp-block-table-of-contents__entry" href="#processes-with-debug-flags">Processes with Debug Flags</a></li><li><a class="wp-block-table-of-contents__entry" href="#command-line-analysis">Command Line Analysis</a></li><li><a class="wp-block-table-of-contents__entry" href="#event-logs-and-audit-policies">Event Logs and Audit Policies</a></li><li><a class="wp-block-table-of-contents__entry" href="#peb-analysis">PEB Analysis</a></li><li><a class="wp-block-table-of-contents__entry" href="#autoruns">Autoruns</a></li><li><a class="wp-block-table-of-contents__entry" href="#security-product-detections">Security Product Detections</a></li></ol></li><li><a class="wp-block-table-of-contents__entry" href="#forensic-examination">Forensic Examination</a></li></ol></li><li><a class="wp-block-table-of-contents__entry" href="#mitigation-and-defense-strategies">Mitigation and Defense Strategies</a><ol><li><a class="wp-block-table-of-contents__entry" href="#enabling-a-powershell-startup-script-via-gpo-to-lock-down-registry-permissions-on-the-ifeo-key">Block Modifications to IFEO via Group Policy</a></li><li><a class="wp-block-table-of-contents__entry" href="#guide-1">Guide</a><ol><li><a class="wp-block-table-of-contents__entry" href="#open-group-policy-management">Open Group Policy Management</a></li><li><a class="wp-block-table-of-contents__entry" href="#edit-the-gpo">Edit the GPO</a></li><li><a class="wp-block-table-of-contents__entry" href="#select-the-ifeo-registry-key">Select the IFEO Registry Key</a></li><li><a class="wp-block-table-of-contents__entry" href="#configure-acl-permissions">Configure ACL (Permissions)</a></li><li><a class="wp-block-table-of-contents__entry" href="#deny-modification-access">Deny Modification Access</a></li><li><a class="wp-block-table-of-contents__entry" href="#apply-the-gpo">Apply the GPO</a></li><li><a class="wp-block-table-of-contents__entry" href="#force-the-policy-update">Force the Policy Update</a></li><li><a class="wp-block-table-of-contents__entry" href="#test-the-restriction">Test the Restriction</a></li></ol></li><li><a class="wp-block-table-of-contents__entry" href="#wdac-deployment-blocking-reg-exe-and-regedit-exe">WDAC Deployment: Blocking reg.exe and regedit.exe</a><ol><li><a class="wp-block-table-of-contents__entry" href="#what-is-wdac">What is WDAC?</a></li><li><a class="wp-block-table-of-contents__entry" href="#guide">Guide</a></li><li><a class="wp-block-table-of-contents__entry" href="#wdac-wizard-and-creating-the-policy">WDAC Wizard and Creating the Policy</a></li><li><a class="wp-block-table-of-contents__entry" href="#testing">Testing</a></li><li><a class="wp-block-table-of-contents__entry" href="#enforcement">Enforcement</a></li></ol></li></ol></li><li><a class="wp-block-table-of-contents__entry" href="#conclusion">Conclusion</a></li></ol></li></ol>
+<h2 id="introduction">Introduction</h2>
+<p>Image File Execution Options (IFEO), originally intended for debugging and troubleshooting, allows specifying a "debugger" program to be launched whenever a particular executable runs. In Debug Object Hijacking, adversaries abuse IFEO's debugger function to hijack the execution flow of trusted applications, causing malicious code to run instead. </p>
+<h3 id="exploiting-ifeo-for-persistence">Exploiting IFEO for Persistence</h3>
+<p>Image File Execution Options is a registry-based configuration that developers use to attach debuggers or modify execution behavior of programs. When a process is created, Windows checks if an IFEO entry exists for that program. If a <code>Debugger</code> value is set under the program’s IFEO registry key, the system will launch the specified debugger program <em>instead of</em> the target application​. In effect, any attempt to run the original executable will invoke the attacker’s chosen program.</p>
+<figure><img alt="" src="/img/2025/03/1.1.png"/><figcaption class="wp-element-caption">Registry entry showing an IFEO hijack where <code>notepad.exe</code> is set to execute a malicious binary (<code>C:\malware\evil.exe</code>) instead of the legitimate process.</figcaption></figure>
+<h5 class="wp-block-heading" id="registry-location"><strong>Registry Location</strong></h5>
+<p><strong><code>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options</code></strong> (with a subkey named after the target executable). On 64-bit systems, entries for 32-bit executables appear under the <code>Wow6432Node</code> sub-path​.</p>
+<figure><img alt="" src="/img/2025/03/1.3.gif"/><figcaption class="wp-element-caption">Demonstration of IFEO hijacking using the <code>reg add</code> command to replace Notepad execution with Calculator.</figcaption></figure>
+<h5 class="wp-block-heading" id="debugger-value-abuse"><strong>Debugger Value Abuse</strong></h5>
+<p>Under the executable's IFEO subkey, attackers add a <strong><code>Debugger</code></strong> value (type REG_SZ) pointing to their malicious executable. For example, a malware could create a subkey for <code>notepad.exe</code> and set its <code>Debugger</code> to <code>"C:\malware\evil.exe"</code>. Thereafter, when a user or system process launches Notepad, Windows will run the <code>evil.exe</code> debugger program instead​. The legitimate <code>notepad.exe</code> will not execute (unless the malicious debugger manually starts it), effectively hijacking the execution flow. </p>
+<h5 class="wp-block-heading" id="alternate-ifeo-values"><strong>Alternate IFEO Values</strong></h5>
+<p>Besides the Debugger setting, IFEO supports other options that attackers exploit. One is the <strong>Application Verifier</strong> mechanism – by setting the <code>GlobalFlag</code> value and a <strong><code>VerifierDlls</code></strong> entry, an attacker can force a chosen DLL to load into the target process at launch​. This achieves persistence via DLL injection without using the Debugger key, and has the added benefit of evading some detection tools like Autoruns​. Another IFEO feature is <strong>Silent Process Exit</strong>: an attacker can configure <code>SilentProcessExit\&lt;target.exe&gt;</code> registry keys (alongside an IFEO <code>GlobalFlag</code> setting) so that when the target application terminates, a designated malicious process is launched.</p>
+<figure><img alt="" src="/img/2025/03/1.2.gif"/></figure>
+<figure><img alt="" src="/img/2025/03/1.2.1.gif"/></figure>
+<p><a href="https://oddvar.moe/2018/04/10/persistence-using-globalflags-in-image-file-execution-options-hidden-from-autoruns-exe/#:~:text=TL%3BDR%20%E2%80%93%20Found%20a%20technique,exe" rel="noreferrer noopener" target="_blank"></a><a href="https://www.proofpoint.com/us/threat-insight/post/ta505-distributes-new-sdbbot-remote-access-trojan-get2-downloader#:~:text=If%20the%20bot%20is%20running,exe%E2%80%9D" rel="noreferrer noopener" target="_blank"></a></p>
+<p>In summary, by modifying IFEO registry keys, malware authors can ensure their payload runs <strong>whenever a specified application is executed</strong>, granting persistence that blends with normal system activity​. Common targets for IFEO hijacking include programs that launch automatically (for example, <code>explorer.exe</code> at user logon) or frequently used utilities. Notably, some malware even hijack system utilities like Task Manager (<code>taskmgr.exe</code>) via IFEO – either to persist or to <strong>block users from running those tools</strong>. In fact, setting an IFEO Debugger for Task Manager is a known tactic used by malware to prevent users from discovering or killing malicious processes.</p>
+<h3 id="the-role-of-debug-object-hijacking">The Role of Debug Object Hijacking</h3>
+<p>Under the hood, when an IFEO Debugger is set, Windows will spawn the specified debugger process with parameters to attach to the target program​. This involves creating a debug object (a kernel-managed structure) that links the debugger and the would-be target process. The <strong>malicious “debugger”</strong> now controls execution: it can simply run independently or manipulate the target program’s execution.</p>
+<figure><img alt="" src="/img/2025/03/2.2-1.gif"/><figcaption class="wp-element-caption">Task Manager (<code>taskmgr.exe</code>) hijacked via IFEO, launching a fake ransomware instead.</figcaption></figure>
+<p>Instead of the target application running normally, the OS invokes the debugger program (the malware) with the target’s name as an argument. For instance, an IFEO entry might cause <code>C:\dbg\ntsd.exe -g notepad.exe</code> to run when Notepad is started. In a hijack scenario, the malware might ignore the argument and carry out its own payload tasks. The original process may never actually initialize (as seen when Notepad was hijacked to launch Calculator in a demo).</p>
+<p>The debugger process is launched with the intention to debug the target. If the target is a high-privilege process, the debugger (malicious code) may inherit those privileges or at least gain access to the target process’s context. This is one way IFEO hijacking can be used not just for persistence but also for privilege escalation. Adversaries have leveraged IFEO to attach to system processes and execute code with SYSTEM rights.</p>
+<p>When a process is started under a debugger via IFEO, certain process creation flags are used internally (e.g., <code>DEBUG_PROCESS</code>). Security monitors can sometimes catch anomalies here – for example, a common system process spawning with debug flags or under an unexpected parent process may indicate a hijack​. From the OS perspective, however, this entire sequence is permissible behavior for debugging, so no explicit error or alert is generated. Attackers essentially hijack the <em>debug object</em> relationship: the operating system thinks it’s facilitating a developer’s debugger, while it’s actually running malicious code.</p>
+<h3 id="registry-modification-process-for-ifeo-persistence">Registry Modification Process for IFEO Persistence</h3>
+<h5 class="wp-block-heading" id="selecting-a-target-executable"><strong>Selecting a Target Executable</strong></h5>
+<p>The attacker identifies a commonly executed program to ensure malware activation. Typical targets include:</p>
+<ul>
+<li><strong>User login processes</strong> (<code>explorer.exe</code>, <code>userinit.exe</code>) </li>
+<li><strong>System utilities</strong> (<code>dllhost.exe</code>, <code>taskmgr.exe</code>) </li>
+<li><strong>Common applications</strong> (<code>notepad.exe</code>, <code>cmd.exe</code>)</li>
+</ul>
+<p>By selecting an executable that is either <strong>routinely invoked</strong> or <strong>can be easily triggered</strong>, attackers maximize their chance of persistence.</p>
+<h5 class="wp-block-heading" id="modifying-the-ifeo-registry-key"><strong>Modifying the IFEO Registry Key</strong></h5>
+<p>Using <strong>Registry Editor</strong>, <code>reg add</code>, or API calls, the attacker creates a subkey under the IFEO path named after the target executable. If the subkey already exists, it is modified to include a <strong>Debugger</strong> value pointing to the malicious executable.</p>
+<p>Example command:</p>
+<p><code>reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\notepad.exe" /v Debugger /t REG_SZ /d "C:\malware\backdoor.exe" /f</code></p>
+<p>Once this value is set, any attempt to launch<strong> <code>notepad.exe</code> </strong>will instead execute<strong> <code>backdoor.exe</code></strong>, fully hijacking execution flow.</p>
+<h5 class="wp-block-heading" id="alternate-ifeo-abuses"><strong>Alternate IFEO Abuses</strong></h5>
+<p>In addition to the <strong>Debugger</strong> key, attackers can exploit other IFEO features to inject malicious payloads without relying on direct process redirection.</p>
+<ul>
+<li><strong>Application Verifier DLL Injection:</strong><br/>Attackers set the <strong>GlobalFlag</strong> registry value to <code>0x100</code>, enabling Application Verifier, and specify a <code>VerifierDlls</code> entry pointing to a rogue DLL. This forces the DLL to load into the target process at launch: </li>
+</ul>
+<p><code>reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\notepad.exe" /v VerifierDlls /t REG_SZ /d "C:\malware\inject.dll" /f</code> </p>
+<p>Unlike the <strong>Debugger</strong> method, this technique achieves <strong>DLL injection persistence</strong> while evading detection by tools like Autoruns.</p>
+<ul>
+<li><strong>Silent Process Exit Hijacking:</strong><br/>Attackers configure <strong>Silent Process Exit</strong> settings so that when a target process terminates, a <strong>malicious process is executed in response</strong>: </li>
+</ul>
+<p><code>reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SilentProcessExit\notepad.exe" /v MonitorProcess /t REG_SZ /d "C:\malware\backdoor.exe" /f</code> </p>
+<p>This technique ensures that every time Notepad exits,<strong> <code>backdoor.exe</code></strong> is launched automatically.</p>
+<h3 id="detection-techniques-and-forensic-analysis">Detection Techniques and Forensic Analysis</h3>
+<h4 id="registry-inspection">Registry Inspection</h4>
+<p>The most direct way is to check the IFEO registry keys for unusual entries. Incident responders or IT administrators should audit the <code>Image File Execution Options</code> registry hive for any <strong>subkeys with a <code>Debugger</code> value or other suspicious configurations</strong>. Legitimate uses of IFEO (outside of developer labs) are rare, so any presence of <code>Debugger</code> entries on production systems warrants scrutiny. For example, if <code>HKLM\...\Image File Execution Options\calc.exe</code> has a debugger pointing to an unknown file path, this is a red flag.</p>
+<figure><img alt="" src="/img/2025/03/4.2.png"/><figcaption class="wp-element-caption">PowerShell command listing executables with IFEO Debugger entries. <code>notepad.exe</code> is hijacked to launch <code>C:\malware\backdoor.exe</code>, indicating unauthorized execution redirection.</figcaption></figure>
+<h5 class="wp-block-heading" id="baselining"><strong>Baselining</strong></h5>
+<p>Maintain a baseline of approved IFEO entries (if any). Comparing current registry settings to a clean baseline can reveal additions. Some legitimate software might use IFEO for valid reasons (e.g., a debugger or compatibility fix), but these should be documented. Any deviation from the baseline or any IFEO pointing to non-standard executables/DLLs should trigger an alert.</p>
+<p>Because IFEO hijacking ultimately causes abnormal process launch patterns, behavior monitoring can catch it. Security logs and EDR telemetry should be examined for:</p>
+<h5 class="wp-block-heading" id="unexpected-parent-child-relationships"><strong>Unexpected Parent-Child Relationships</strong> </h5>
+<p>If an application <em>A</em> is commonly launched by the user or the system, but in reality you observe another process <em>B</em> starting in its place, that’s suspicious. For instance, seeing <code>wscript.exe</code> spawn when <code>dllhost.exe</code> was supposed to start indicates an IFEO debugger redirection.</p>
+<h5 class="wp-block-heading" id="processes-with-debug-flags"><strong>Processes with Debug Flags</strong></h5>
+<p>Processes created with the <code>DEBUG_PROCESS</code> flag or similar can be a sign of IFEO usage. Monitoring APIs or using Sysmon with an appropriate configuration can log when a process is created with debugging. MITRE <a href="https://attack.mitre.org/techniques/T1546/012/">(T1546.012)</a> suggests monitoring for creation flags indicative of debugging as a detection measure​. Likewise, if a normally benign process (like <code>explorer.exe</code>) is started in suspended mode awaiting a debugger, it may indicate a debugger was attached.</p>
+<h5 class="wp-block-heading" id="command-line-analysis"><strong>Command Line Analysis</strong></h5>
+<p>The command line of the launched debugger process might include the target process name as an argument. For example, a malware set as IFEO debugger for <code>svchost.exe</code> might be launched with command line "<code>malicious.exe svchost.exe ...</code>". EDR solutions that record command-line parameters can pick this up. Unusual command-line usage of system tools (like <code>rundll32</code>, <code>wscript</code>, etc.) at times they normally wouldn’t run might also correlate with IFEO triggers.</p>
+<h5 class="wp-block-heading" id="event-logs-and-audit-policies"><strong>Event Logs and Audit Policies</strong></h5>
+<p>Enabling auditing on registry keys related to IFEO can generate Windows Event Log entries when they are modified. For instance, enabling auditing on <code>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options</code> will log an event if a new value or subkey is added. Similarly, if GFlags (the Microsoft <strong>Global Flags</strong> utility) is used to set IFEO options, command-line auditing or PowerShell logs may capture that usage​. </p>
+<figure><img alt="" src="/img/2025/03/4.1.png"/><figcaption class="wp-element-caption">Sysmon event log capturing <code>notepad.exe</code> execution, which instead launched <code>C:\malware\backdoor.exe</code> due to an IFEO Debugger entry.</figcaption></figure>
+<h5 class="wp-block-heading" id="peb-analysis"><strong>PEB Analysis</strong></h5>
+<p>Analyzing the Process Environment Block (PEB) can reveal IFEO hijacking by checking the <strong>BeingDebugged</strong> flag, which indicates whether a process is running under a debugger. If <strong>ReadImageFileExecOptions</strong> is set to <strong>No</strong>, but the process is still being debugged, this suggests that a silent IFEO hijack has been used to force execution through an unauthorized debugger, potentially redirecting execution flow for persistence or privilege escalation.</p>
+<figure><img alt="" src="/img/2025/03/2.3.png"/><figcaption class="wp-element-caption">PEB analysis revealing <code>BeingDebugged: Yes</code> despite <code>ReadImageFileExecOptions: No</code>, indicating forced execution under an unauthorized debugger, a key sign of IFEO abuse.</figcaption></figure>
+<h5 class="wp-block-heading" id="autoruns"><strong>Autoruns</strong></h5>
+<p>Security tools that enumerate image hijacks can reveal IFEO entries under <code>HKLM\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options</code> and <code>Wow6432Node</code>, highlighting executables with Debugger values pointing to suspicious binaries (e.g., <code>C:\malware\backdoor.exe</code>). If a commonly used application like <code>notepad.exe</code> is set to launch an unknown or unverified file, this strongly indicates potential compromise. Additionally, identifying timestamps of modification can help determine when the hijack was established.</p>
+<figure><img alt="" src="/img/2025/03/4.3.png"/><figcaption class="wp-element-caption">Autoruns revealing IFEO Debugger entries hijacking <code>notepad.exe</code>, redirecting execution to <code>C:\malware\backdoor.exe</code>, an indicator of persistence abuse.</figcaption></figure>
+<h5 class="wp-block-heading" id="security-product-detections"><strong>Security Product Detections</strong></h5>
+<p>Modern AV/EDR products often look for IFEO hijacks. Malwarebytes, for instance, flags any unknown program setting an IFEO debugger as “RiskWare.IFEOHijack”​. It specifically watches for registry writes under the IFEO key and checks if a debugger value is present.</p>
+<h4 id="forensic-examination"><strong>Forensic Examination</strong></h4>
+<p>In a digital forensics scenario, the investigator should always dump the registry hives from the system and search for the string "Image File Execution Options". Likewise, they should search for any suspicious file paths that might be used as debuggers. The Windows registry is an authoritative source: if a Debugger or related value exists, it will be in the registry data. Use RegRipper to parse and find IFEO entries, and analyze the timeline of registry events to reveal when the IFEO was added and by what process. </p>
+<h3 id="mitigation-and-defense-strategies">Mitigation and Defense Strategies</h3>
+<p>Preventing IFEO-based persistence is challenging because it exploits legitimate OS functionality​. There is no simple switch to disable Image File Execution Options globally without affecting developer tools or system diagnostics. However, implement several defensive measures to reduce the risk and impact:</p>
+<ul>
+<li><strong>Restrict Administrative Privileges:</strong> </li>
+</ul>
+<p>Since creating IFEO entries requires writing to HKLM (or modifying global debugger settings), an attacker typically needs administrative rights. Enforcing the principle of least privilege can help; standard users should not have rights to alter HKLM settings. Limiting admin access and using tools like User Account Control (UAC) can make it harder for malware running as a user to elevate and set IFEO persistence.</p>
+<ul>
+<li><strong>Application Whitelisting / Code Signing Policies:</strong> </li>
+</ul>
+<p>Employ application control solutions such as Microsoft WDAC/AppLocker to restrict what binaries can execute or be assigned as debuggers. For instance, if only approved debugger tools (e.g., Visual Studio’s debugger or Sysinternals) are allowed to run, an arbitrary malware binary being set as a debugger might be blocked from executing. Therefore, whitelisting needs to be coupled with other controls (like script control or command-line restrictions for legitimate tools).</p>
+<ul>
+<li><strong>Group Policy and Registry Hardening:</strong> </li>
+</ul>
+<p>Although you cannot disable IFEO, you can harden the registry via permissions. Ensure that only Trusted Installer or Administrators have write access to the IFEO keys (by default they should). Some security templates recommend setting specific ACLs on sensitive registry paths. Regularly backup and/or monitor critical registry keys so changes can be quickly identified and reverted. </p>
+<ul>
+<li><strong>Endpoint Monitoring and Response:</strong> </li>
+</ul>
+<p>Use EDR solutions that can block or warn on suspicious registry changes. Many EDRs allow creation of custom rules; an organization could define a rule to detect the creation of an IFEO <code>Debugger</code> value and either alert or prevent it.</p>
+<ul>
+<li><strong>Removal and Recovery:</strong> </li>
+</ul>
+<p>If an IFEO hijack is discovered, removing it is straightforward: delete the malicious subkey or the Debugger/Verifier values from the registry. However, it’s crucial to also remove the malware file that it pointed to, or the attacker could re-establish the entry.</p>
+<h4 id="enabling-a-powershell-startup-script-via-gpo-to-lock-down-registry-permissions-on-the-ifeo-key">Block Modifications to IFEO via Group Policy</h4>
+<p>One of the easiest options to block modification to the registry key in your organization would be to block Image File Execution Options in your organization's Group Policy. This prevents unauthorized changes, including debugger hijacking techniques often used by malware for persistence. By restricting access through Group Policy, administrators can ensure that no user or process can modify IFEO entries, effectively mitigating security risks and maintaining system integrity.</p>
+<h4 id="guide-1">Guide</h4>
+<h5 class="wp-block-heading" id="open-group-policy-management"><strong>Open Group Policy Management</strong></h5>
+<ul>
+<li>Press <code>Win + R</code>, type <code>gpmc.msc</code>, and press Enter.</li>
+<li>Expand <strong>Forest → Domains → yourdomain.local</strong>.</li>
+<li>Right-click <strong>Group Policy Objects</strong> and click <strong>New</strong>.</li>
+<li>Name it <strong>"Block IFEO Key"</strong> and click <strong>OK</strong>.</li>
+</ul>
+<figure><img alt="" src="/img/2025/03/image-12.png"/><figcaption class="wp-element-caption">A new GPO named "Block IFEO Key" is being created under "yourdomain.local" to manage registry settings.</figcaption></figure>
+<h5 class="wp-block-heading" id="edit-the-gpo"><strong>Edit the GPO</strong></h5>
+<ul>
+<li>Right-click <strong>Block IFEO Key</strong> and click <strong>Edit</strong>.</li>
+<li>Navigate to <strong>Computer Configuration → Windows Settings → Security Settings → Registry</strong>.</li>
+<li>Right-click <strong>Registry</strong> and select <strong>Add Key</strong>.</li>
+</ul>
+<figure><img alt="" src="/img/2025/03/image-13.png" style="width:536px;height:auto"/><figcaption class="wp-element-caption">Registry Path in Group Policy Editor</figcaption></figure>
+<h5 class="wp-block-heading" id="select-the-ifeo-registry-key"><strong>Select the IFEO Registry Key</strong></h5>
+<ul>
+<li>In the <strong>Select Registry Key</strong> window, navigate to:<br/><code>HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options</code></li>
+<li>Select <strong>"Image File Execution Options"</strong> and click <strong>OK</strong>.</li>
+</ul>
+<h5 class="wp-block-heading" id="configure-acl-permissions"><strong>Configure ACL (Permissions)</strong></h5>
+<ul>
+<li>Select <strong>"Replace existing permissions on all subkeys with inheritable permissions"</strong>.</li>
+<li>Click <strong>Edit Security…</strong>.</li>
+</ul>
+<figure><img alt="" src="/img/2025/03/image-14.png"/><figcaption class="wp-element-caption">Replacing existing permissions on all subkeys with inheritable permissions selected. </figcaption></figure>
+<h5 class="wp-block-heading" id="deny-modification-access"><strong>Deny Modification Access</strong></h5>
+<ul>
+<li>In the <strong>Permissions</strong> window, select <strong>Users</strong> (or a specific group).</li>
+<li>Under <strong>Permissions</strong>, check <strong>Deny</strong> for:
+<ul>
+<li><strong>Set Value</strong> (blocks modifications)</li>
+<li><strong>Create Subkeys</strong> (prevents new entries)</li>
+<li><strong>Delete</strong> (prevents deletion)</li>
+<li><strong>Write DAC</strong> (prevents changing permissions)</li>
+</ul>
+</li>
+<li>Click <strong>OK</strong> and apply the settings.</li>
+</ul>
+<h5 class="wp-block-heading" id="apply-the-gpo"><strong>Apply the GPO</strong></h5>
+<ul>
+<li>Close the <strong>Group Policy Editor</strong>.</li>
+<li>In <strong>Group Policy Management</strong>, right-click <strong>yourdomain.local</strong>.</li>
+<li>Click <strong>Link an Existing GPO</strong>, select <strong>"Block IFEO Key"</strong>, and click <strong>OK</strong>.</li>
+</ul>
+<h5 class="wp-block-heading" id="force-the-policy-update"><strong>Force the Policy Update</strong></h5>
+<ul>
+<li>Open PowerShell or CMD and run:<br/><code>gpupdate /force</code></li>
+<li>Reboot the machine to apply the policy.</li>
+</ul>
+<h5 class="wp-block-heading" id="test-the-restriction"><strong>Test the Restriction</strong></h5>
+<ul>
+<li>Open <strong>Registry Editor (<code>regedit.exe</code>)</strong>.</li>
+<li>Try modifying or adding a subkey under:<br/><code>HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options</code></li>
+<li>You should see <strong>"Access Denied"</strong>, confirming the GPO is working.</li>
+</ul>
+<h4 id="wdac-deployment-blocking-reg-exe-and-regedit-exe">WDAC Deployment: Blocking reg.exe and regedit.exe</h4>
+<p>Another approach - although overkill - would be to leverage Windows Defender Application Control (WDAC) to restrict what executables can run on a system. In my implementation, I deployed WDAC to block key registry key utilities like reg.exe and regedit.exe, which are commonly targeted by attackers to modify critical IFEO settings.</p>
+<h5 class="wp-block-heading" id="what-is-wdac"><strong>What is WDAC?</strong></h5>
+<p>Windows Defender Application Control (WDAC) is a security feature in Windows that enables administrators to control which applications, drivers, and binaries are allowed to run on a system. By establishing a set of detailed rules—such as those based on file hashes, digital signatures, and file paths—WDAC enforces a "default deny" approach that blocks any software not explicitly permitted. This level of control is particularly effective in reducing the attack surface by preventing unauthorized or malicious code from executing.</p>
+<h5 class="wp-block-heading" id="guide"><strong>Guide</strong></h5>
+<p>For this guide, I used a Windows Server 2022 Datacenter Image. I downloaded the following dependencies in order to install the <a href="https://webapp-wdac-wizard.azurewebsites.net/">WDAC Wizard</a>:</p>
+<ul>
+<li><a href="https://github.com/microsoft/microsoft-ui-xaml/releases/download/v2.8.6/Microsoft.UI.Xaml.2.8.x64.appx">https://github.com/microsoft/microsoft-ui-xaml/releases/download/v2.8.6/Microsoft.UI.Xaml.2.8.x64.appx</a></li>
+<li><a href="https://github.com/QuangVNMC/LTSC-Add-Microsoft-Store/blob/master/Microsoft.VCLibs.140.00.UWPDesktop_14.0.33728.0_x64__8wekyb3d8bbwe.Appx">https://github.com/QuangVNMC/LTSC-Add-Microsoft-Store/blob/master/Microsoft.VCLibs.140.00.UWPDesktop_14.0.33728.0_x64__8wekyb3d8bbwe.Appx</a></li>
+<li><a href="https://learn.microsoft.com/en-us/windows/msix/app-installer/install-update-app-installer">https://learn.microsoft.com/en-us/windows/msix/app-installer/install-update-app-installer</a></li>
+<li><a href="https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0.14-windows-x64-installer?cid=getdotnetcore">https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0.14-windows-x64-installer?cid=getdotnetcore</a></li>
+</ul>
+<p>To deploy Windows Defender Application Control via Group Policy </p>
+<ul>
+<li>Computer Configuration → Administrative Templates → System → Device Guard → Deploy Windows Defender Application Control</li>
+<li>File Path: <code>C:\Policies\RegistryBlock.p7b</code> </li>
+</ul>
+<h5 class="wp-block-heading" id="wdac-wizard-and-creating-the-policy"><strong>WDAC Wizard and Creating the Policy</strong></h5>
+<ol>
+<li>Open the <code>Windows Defender App Control Policy Wizard</code> application</li>
+<li>Select the <code>Policy Creator</code> </li>
+</ol>
+<figure><img alt="" src="/img/2025/03/image-2.png"/><figcaption class="wp-element-caption">Windows Defender Application Control Policy Wizard interface, highlighting the option to create a new policy.</figcaption></figure>
+<p>3. Select <code>Single Policy Format</code></p>
+<figure><img alt="" src="/img/2025/03/image-3.png"/><figcaption class="wp-element-caption">Selecting the 'Single Policy Format' option in the Windows Defender Application Control Policy Wizard for deploying policies.</figcaption></figure>
+<p>4. Select the <code>Default Windows Mode</code> and Name the Policy <code>RegistryBlock</code> and the File Location in <code>C:\Policies</code>.</p>
+<p>The Group Policy Object "BLOCK IEFO KEY" under "yourdomain.local" is set up to manage IP Security Policies on Active Directory, retrieved from the local computer.</p>
+<p>5. Select All of these Options, making sure to Enable <code>Audit Mode</code>, or else the policy will take place with no testing capability. You can edit this later to enable Blocking. </p>
+<ul>
+<li>If you only see two columns, click on Advanced Options.</li>
+<li>Make sure the <code>Disable Runtime Filepath Rules</code> is checked.</li>
+</ul>
+<figure><img alt="" src="/img/2025/03/image-5.png"/><figcaption class="wp-element-caption">Configuration options for a Windows Defender Application Control policy in the Policy Wizard, illustrating settings for managing application integrity and security.</figcaption></figure>
+<p>6. Here is where we are going to block the two registry modification binaries. Click on<code> + Add Custom</code>. I choose to block the file hash because File Paths are not concrete. </p>
+<ul>
+<li>Use <code>Get-FileHash</code> on <code>C:\Windows\System32\reg.exe</code> and <code>C:\Windows\regedit.exe</code> and block the two values. </li>
+</ul>
+<ul>
+<li>You can decide if you want to block known vulnerable/malicious drivers by checking <code>Merge with Recommended User Mode Block Rules</code> and <code>Merge with Recommended Kernel Block Rules</code>. </li>
+</ul>
+<figure><img alt="" src="/img/2025/03/image-11.png"/><figcaption class="wp-element-caption">Setting a custom user mode rule to deny execution based on file hash in Windows Defender Application Control.</figcaption></figure>
+<p>7. Your Policy is created. </p>
+<ul>
+<li>Move the SiPolicy.p7b from C:\Policies to C:\Windows\System32\CodeIntegrity.</li>
+<li>Reboot the Machine for the block to take place. </li>
+</ul>
+<figure><img alt="" src="/img/2025/03/image-8.png"/><figcaption class="wp-element-caption">Completion of Windows Defender Application Control policy creation in progress.</figcaption></figure>
+<h5 class="wp-block-heading" id="testing"><strong>Testing</strong></h5>
+<p>After the system has rebooted, run <code>Start-Process "C:\Windows\regedit.exe"</code> in an elevated Powershell Terminal. </p>
+<p>Now, open the Windows Event Viewer and browse to <code>Application and Services Logs &gt; Microsoft &gt; Windows &gt; CodeIntegrity &gt; Operational</code></p>
+<p>Filter the event log for event id <code>3076</code> (or <code>3077</code> if the policy is in enforce mode). If there is an application that was run that either would have been or was blocked by the policy, then an event should have been created here.</p>
+<p>If you have an event that blocks <code>regedit.exe</code> then you have successfully completed the registry block. </p>
+<figure><img alt="" src="/img/2025/03/image-9.png"/><figcaption class="wp-element-caption">Event log showing code integrity determination in Windows, indicating a process attempted to load regedit.exe but did not meet signing requirements.</figcaption></figure>
+<h5 class="wp-block-heading" id="enforcement"><strong>Enforcement</strong></h5>
+<p>If you have decided to enforce the two registry blockers in your organization, here's how:</p>
+<ol>
+<li>Load into the App Control Policy Wizard and Select the <code>Policy Editor</code>.</li>
+<li>Select the XML File from <code>C:\Policies</code>, Click Next. </li>
+<li>In the Policy Rules, turn off <code>Audit Mode</code>. Continue to build the policy, and Reboot. </li>
+</ol>
+<h3 id="conclusion">Conclusion</h3>
+<p>Image File Execution Options hijacking (Debug Object Hijacking) represents a clever abuse of Windows debugging facilities to achieve persistent malware execution. By simply manipulating registry keys, attackers can covertly insert themselves into the normal process launch chain of the operating system. This technique provides a reliable and often stealthy foothold—malicious code runs under the guise of legitimate processes and can inherit their privileges. Continuous auditing and security awareness of such mechanisms are essential to defend against persistence techniques that “live off the land.” By understanding how Debug Object Hijacking via IFEO works and learning from real-world abuses of this technique, security teams can better secure Windows environments against this form of attack.</p>
+<p></p>
+
+
+          <p class="post-back"><a href="/">&larr; Back to Blog</a></p>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>&copy; byevincent &mdash; <a href="https://github.com/byevincent" target="_blank" rel="noreferrer">GitHub</a></p>
+      </div>
+    </footer>
+
+    <script src="/js/main.js"></script>
+  </body>
+</html>

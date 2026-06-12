@@ -1,2 +1,212 @@
-# Welcome
-This is my first GitHub Pages site!
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>byevincent</title>
+    <meta name="description" content="Security research, malware analysis, cloud IR, and tooling by Vincent Dinh.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+  </head>
+  <body>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="logo" href="/">byevincent</a>
+        <nav class="nav">
+          <div class="nav-links">
+            <a href="/">Blog</a>
+            <a href="/about/">About</a>
+          </div>
+          <button class="theme-toggle" aria-label="Toggle theme">
+            <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+            <span></span><span></span><span></span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+
+      <section class="hero">
+        <h1>Security research &amp; notes</h1>
+        <p>Writeups on malware analysis, cloud IR, offensive tooling, and AI security.</p>
+      </section>
+
+      <div class="filter-row">
+        <button class="pill active" data-tag="all">All</button>
+        <button class="pill" data-tag="tooling">Tooling</button>
+        <button class="pill" data-tag="malware">Malware</button>
+        <button class="pill" data-tag="cloud-ir">Cloud IR</button>
+        <button class="pill" data-tag="ad">AD</button>
+      </div>
+
+      <section class="card-grid" id="posts">
+
+        <article class="post-card" data-tags="tooling">
+          <a href="/posts/truffler-an-ml-powered-credential-hunter-for-smb-file-shares/" class="card-img-link">
+            <div class="card-img" style="background:#0a1f1f;">
+              <img src="/img/2026/06/sharesift-cover.png" alt="ShareSift, an ML Powered Credential Hunter for SMB File Shares" onerror="this.style.display='none'">
+              <span class="card-img-label">Tooling</span>
+            </div>
+          </a>
+          <div class="card-body">
+            <div class="card-tag">Tooling</div>
+            <h2 class="card-title"><a href="/posts/truffler-an-ml-powered-credential-hunter-for-smb-file-shares/">ShareSift, an ML Powered Credential Hunter for SMB File Shares</a></h2>
+            <p class="card-excerpt">This is a tool announcement and a build log. I built ShareSift because Snaffler&#x27;s false positive rate is a real problem on engagements, and I wanted to see…</p>
+            <div class="card-footer">
+              <time class="card-date" datetime="2026-06-07">Jun 7, 2026</time>
+              <a class="read-link" href="/posts/truffler-an-ml-powered-credential-hunter-for-smb-file-shares/">Read &rarr;</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="post-card" data-tags="tooling">
+          <a href="/posts/what-it-took-to-build-a-rag-system-for-cybersecurity/" class="card-img-link">
+            <div class="card-img" style="background:#0a1f1f;">
+              <img src="/img/2026/04/rag-explained-1.png" alt="What It Took to Build a RAG System for Cybersecurity" onerror="this.style.display='none'">
+              <span class="card-img-label">Tooling</span>
+            </div>
+          </a>
+          <div class="card-body">
+            <div class="card-tag">Tooling</div>
+            <h2 class="card-title"><a href="/posts/what-it-took-to-build-a-rag-system-for-cybersecurity/">What It Took to Build a RAG System for Cybersecurity</a></h2>
+            <p class="card-excerpt">I&#x27;d be bouncing between a browser, Splunk, course notes, Sigma rules, and old pentest writeups just to answer the same kinds of questions: Which Event IDs matter here?…</p>
+            <div class="card-footer">
+              <time class="card-date" datetime="2026-04-04">Apr 4, 2026</time>
+              <a class="read-link" href="/posts/what-it-took-to-build-a-rag-system-for-cybersecurity/">Read &rarr;</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="post-card" data-tags="malware">
+          <a href="/posts/reverse-engineering-masslogger-variant-packed-with-autoit/" class="card-img-link">
+            <div class="card-img" style="background:#1f0a0a;">
+              <img src="/img/2025/05/screenshot_3.png" alt="Reverse Engineering Masslogger Variant Packed with AutoIt" onerror="this.style.display='none'">
+              <span class="card-img-label">Malware</span>
+            </div>
+          </a>
+          <div class="card-body">
+            <div class="card-tag">Malware</div>
+            <h2 class="card-title"><a href="/posts/reverse-engineering-masslogger-variant-packed-with-autoit/">Reverse Engineering Masslogger Variant Packed with AutoIt</a></h2>
+            <p class="card-excerpt">Overview Stage 1 - AutoIt Dropper (script.au3) Stage 2 – DLL Loader (740b0000.clr.dll) Stage 3 – Decrypted Payload Execution (RegSvcs.exe) Volatility Memory Analysis - Manual PE Mapping Legitimate…</p>
+            <div class="card-footer">
+              <time class="card-date" datetime="2025-05-22">May 22, 2025</time>
+              <a class="read-link" href="/posts/reverse-engineering-masslogger-variant-packed-with-autoit/">Read &rarr;</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="post-card" data-tags="ad">
+          <a href="/posts/active-directory-detection-engineering-notes/" class="card-img-link">
+            <div class="card-img" style="background:#1f1a0a;">
+              <img src="/img/2025/04/netdia-1.jpg" alt="Detection Engineering for Active Directory Attack Techniques" onerror="this.style.display='none'">
+              <span class="card-img-label">AD</span>
+            </div>
+          </a>
+          <div class="card-body">
+            <div class="card-tag">AD</div>
+            <h2 class="card-title"><a href="/posts/active-directory-detection-engineering-notes/">Detection Engineering for Active Directory Attack Techniques</a></h2>
+            <p class="card-excerpt">Introduction This blog outlines detection strategies for over 20 real-world Active Directory attack techniques. Each entry includes: ATT&amp;CK technique mapping Execution commands Log source configurations Tested detection queries…</p>
+            <div class="card-footer">
+              <time class="card-date" datetime="2025-04-24">Apr 24, 2025</time>
+              <a class="read-link" href="/posts/active-directory-detection-engineering-notes/">Read &rarr;</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="post-card" data-tags="malware">
+          <a href="/posts/debug-object-hijacking-via-image-file-execution-options-ifeo-for-persistence/" class="card-img-link">
+            <div class="card-img" style="background:#1f0a0a;">
+              <img src="/img/2025/03/screenshot-from-2025-03-17-15-16-54.png" alt="Debug Object Hijacking via Image File Execution Options (IFEO) for Persistence" onerror="this.style.display='none'">
+              <span class="card-img-label">Malware</span>
+            </div>
+          </a>
+          <div class="card-body">
+            <div class="card-tag">Malware</div>
+            <h2 class="card-title"><a href="/posts/debug-object-hijacking-via-image-file-execution-options-ifeo-for-persistence/">Debug Object Hijacking via Image File Execution Options (IFEO) for Persistence</a></h2>
+            <p class="card-excerpt">Introduction Exploiting IFEO for Persistence Registry Location Debugger Value Abuse Alternate IFEO Values The Role of Debug Object Hijacking Registry Modification Process for IFEO Persistence Selecting a Target…</p>
+            <div class="card-footer">
+              <time class="card-date" datetime="2025-03-14">Mar 14, 2025</time>
+              <a class="read-link" href="/posts/debug-object-hijacking-via-image-file-execution-options-ifeo-for-persistence/">Read &rarr;</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="post-card" data-tags="malware">
+          <a href="/posts/analyzing-eight-malicious-documents-in-a-single-day-techniques-tools-and-key-findings/" class="card-img-link">
+            <div class="card-img" style="background:#1f0a0a;">
+              <img src="/img/2025/01/image-16.png" alt="Analyzing Eight Malicious Documents in a Single Day: Techniques, Tools, and Key Findings" onerror="this.style.display='none'">
+              <span class="card-img-label">Malware</span>
+            </div>
+          </a>
+          <div class="card-body">
+            <div class="card-tag">Malware</div>
+            <h2 class="card-title"><a href="/posts/analyzing-eight-malicious-documents-in-a-single-day-techniques-tools-and-key-findings/">Analyzing Eight Malicious Documents in a Single Day: Techniques, Tools, and Key Findings</a></h2>
+            <p class="card-excerpt">After completing HackTheBox’s Malicious Document Analysis Module, I felt inspired to dive deeper into analyzing malicious documents independently. My goal was to analyze recent samples quickly, within a…</p>
+            <div class="card-footer">
+              <time class="card-date" datetime="2025-01-26">Jan 26, 2025</time>
+              <a class="read-link" href="/posts/analyzing-eight-malicious-documents-in-a-single-day-techniques-tools-and-key-findings/">Read &rarr;</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="post-card" data-tags="tooling">
+          <a href="/posts/hack-the-box-certified-defensive-security-analyst-cdsa-review/" class="card-img-link">
+            <div class="card-img" style="background:#0a1f1f;">
+              <img src="/img/2025/01/image-19.png" alt="Hack The Box Certified Defensive Security Analyst (CDSA) Review" onerror="this.style.display='none'">
+              <span class="card-img-label">Tooling</span>
+            </div>
+          </a>
+          <div class="card-body">
+            <div class="card-tag">Tooling</div>
+            <h2 class="card-title"><a href="/posts/hack-the-box-certified-defensive-security-analyst-cdsa-review/">Hack The Box Certified Defensive Security Analyst (CDSA) Review</a></h2>
+            <p class="card-excerpt">Here’s a Review of the Certified Defensive Security Analyst Certification from HackTheBox. Official Description from HackTheBox “HTB Certified Defensive Security Analyst (HTB CDSA) is a highly hands-on certification…</p>
+            <div class="card-footer">
+              <time class="card-date" datetime="2025-01-26">Jan 26, 2025</time>
+              <a class="read-link" href="/posts/hack-the-box-certified-defensive-security-analyst-cdsa-review/">Read &rarr;</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="post-card" data-tags="ad">
+          <a href="/posts/real-world-threat-detection-detecting-ad-and-network-attacks-with-custom-dashboards-and-alerts-on-splunk/" class="card-img-link">
+            <div class="card-img" style="background:#1f1a0a;">
+              <img src="/img/2025/01/splunk_logo.png" alt="Real-World Threat Detection: Detecting AD and Network Attacks with Custom Dashboards and Alerts on Splunk" onerror="this.style.display='none'">
+              <span class="card-img-label">AD</span>
+            </div>
+          </a>
+          <div class="card-body">
+            <div class="card-tag">AD</div>
+            <h2 class="card-title"><a href="/posts/real-world-threat-detection-detecting-ad-and-network-attacks-with-custom-dashboards-and-alerts-on-splunk/">Real-World Threat Detection: Detecting AD and Network Attacks with Custom Dashboards and Alerts on Splunk</a></h2>
+            <p class="card-excerpt">Introduction Setting Up Splunk Attack Range Setup IAM and AWS Pre-setup Range Commands: Realism Download VM (AMI) Create AMI Export Configuration Import into VirtualBox VM Networking To set…</p>
+            <div class="card-footer">
+              <time class="card-date" datetime="2025-01-26">Jan 26, 2025</time>
+              <a class="read-link" href="/posts/real-world-threat-detection-detecting-ad-and-network-attacks-with-custom-dashboards-and-alerts-on-splunk/">Read &rarr;</a>
+            </div>
+          </div>
+        </article>
+
+
+
+      </section>
+
+      <div class="posts-empty" id="posts-empty" style="display:none">
+        <p>No posts match that filter.</p>
+      </div>
+
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>&copy; byevincent &mdash; <a href="https://github.com/byevincent" target="_blank" rel="noreferrer">GitHub</a></p>
+      </div>
+    </footer>
+
+    <script src="/js/main.js"></script>
+
+  </body>
+</html>

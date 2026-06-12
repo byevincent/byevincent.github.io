@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>What It Took to Build a RAG System for Cybersecurity — byevincent</title>
+    <meta property="og:title" content="What It Took to Build a RAG System for Cybersecurity">
+    <meta property="og:description" content="I&#x27;d be bouncing between a browser, Splunk, course notes, Sigma rules, and old pentest writeups just to answer the same kinds of questions: Which Event IDs matter here?…">
+    <meta property="og:image" content="https://byevincent.xyz/img/2026/04/rag-explained-1.png">
+    <meta property="og:url" content="https://byevincent.xyz/posts/what-it-took-to-build-a-rag-system-for-cybersecurity/">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary_large_image">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+  </head>
+  <body>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="logo" href="/">byevincent</a>
+        <nav class="nav">
+          <div class="nav-links">
+            <a href="/">Blog</a>
+            <a href="/about/">About</a>
+          </div>
+          <button class="theme-toggle" aria-label="Toggle theme">
+            <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+            <span></span><span></span><span></span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="post-container">
+        <header class="post-header">
+          <h1>What It Took to Build a RAG System for Cybersecurity</h1>
+          <div class="meta">By <strong>Vincent Dinh</strong> &bull; <time datetime="2026-04-04">Apr 4, 2026</time> &bull; <span class="tag">Tooling</span></div>
+        </header>
+        <article class="post-article">
+
+          
+<p>I'd be bouncing between a browser, Splunk, course notes, Sigma rules, and old pentest writeups just to answer the same kinds of questions: Which Event IDs matter here? What does the SPL actually look like when it's not generic junk? Is this AD right exploitable or am I wasting time? The information was already in my notes. The problem was getting it back out fast enough to be useful. </p>
+<p>So I built a local RAG pipeline around the stuff I actually use: course material, detection rules, gold-standard SPL queries, and pentesting procedures. Qwen3.5 35B-A3B through vLLM for generation, Qwen3-Embedding-0.6B for dense retrieval, ChromaDB, Whoosh for BM25, and Qwen3-Reranker-0.6B on top. Roughly 49,000 chunks in the index.</p>
+<p>The basic tutorial version of RAG was nowhere near good enough for this domain. Cybersecurity retrieval breaks in ways that don't show up in generic demos. Sometimes the right answer is a detection with correct fields and pivots. Sometimes it's just an explanation. </p>
+<p>The biggest lesson from this build was not about embeddings or model size. It was that bad corpus quality will crush everything downstream. I spent time on retrieval logic, reranking, query expansion, and routing. Deleting the bad data did more than all of that combined.</p>
+<figure><img alt="" src="/img/2026/04/screenshot_20260406_132856-1.png"/></figure>
+<hr class="wp-block-separator has-alpha-channel-opacity"/>
+<p><strong>Why the normal RAG recipe fell apart here</strong></p>
+<p>The usual <code>vector DB + top-k + LLM</code> flow was a decent starting point, but it wasn’t enough for this domain.</p>
+<p>A lot of the important artifacts in cybersecurity do not look like normal language. They're GUIDs, Event IDs, command flags, registry paths, API names, or ugly one-off strings that matter a lot and embed badly. DCSync is the obvious example. If the query says "DCSync" and the source only has replication GUIDs, dense retrieval can drift right past it while BM25 hits it instantly.</p>
+<p>Intent is another problem. "What is LSASS?" and "Write a Splunk detection for LSASS dumping" should not go through the same pipeline. One wants explanation. The other wants fields, pivots, syntax, and something executable.</p>
+<p>Then there's corpus quality. Once the index gets polluted, most of the clever tuning stops mattering nearly as much as people want it to.</p>
+<hr class="wp-block-separator has-alpha-channel-opacity"/>
+<p><strong>What the pipeline turned into</strong></p>
+<figure><img alt="" src="/img/2026/04/image.png" style="aspect-ratio:0.533717218310397;width:476px;height:auto"/></figure>
+<p>I didn't start with a five-stage pipeline because I had some grand design. I ended up there because the simpler versions kept breaking.</p>
+<pre><code>Query → Classify → Expand + Rewrite → Vector + BM25 → Gold Boost + Rerank → Qwen3 35B-A3B</code></pre>
+<p>The final shape was: classify the query, expand the query, run hybrid retrieval, jam any known-good gold blocks into the context if the query clearly matches them, rerank the pile, then generate. That sounds neat written out like that, but each piece only exists because I got burned by not having it. Query classification exists because conceptual questions and detection questions were poisoning each other. Expansion exists because one attack can show up as a nickname, an API name, a command, or a GUID. Gold boost exists because if I already have a validated SPL block for DCSync, I don't want cosine similarity deciding whether I see it today.</p>
+<p>I couldn’t get away with dense retrieval alone. It was fine when the query was broad, but the moment a question hinged on exact junk like a GUID, a flag, or a tool name, BM25 was the part that kept the system honest. “Scheduled task lateral movement” could still surface <code>ATExec</code>, but detection queries lived or died on exact tokens, so I pushed the weighting toward BM25.</p>
+<p>One small thing that mattered way more than it should have: the embedding instruction prefix. It had to match at query time and index time. If it drifted, the embedding space quietly went crooked and nothing looked obviously broken. Those were some of the easiest failures to miss because nothing looked obviously broken.</p>
+<pre><code># hybrid_query.py — Embedding setup
+# Qwen3-Embedding-0.6B · BF16 · CUDA
+
+# BF16 on Blackwell (sm120). TF32 for matmul throughput.
+_PREFERRED_TORCH_DTYPE = torch.bfloat16
+torch.backends.cuda.matmul.allow_tf32 = True
+
+EMBED_MODEL = "/home/george-5090/models/qwen3-embedding-0.6b"
+EMBED_DIM   = 1024
+
+# Instruction prefix for asymmetric retrieval.
+# Must match the prefix used at index time — or embedding space geometry breaks.
+QUERY_INSTRUCTION = """Instruct: Given a question, retrieve relevant passages that answer it.
+Query: """</code></pre>
+<p>Same story with temperature. At 0.7, the system would produce nice-looking SPL that was just wrong in subtle ways: hallucinated fields, bad Event IDs, fake confidence. Dropping factual queries down to 0.3 was one of the highest-leverage changes I made. It didn't stop hallucinations, it just made them less polished and easier to catch.</p>
+<hr class="wp-block-separator has-alpha-channel-opacity"/>
+<p><strong>Query Expansion</strong></p>
+<p>Adversary technique names are inconsistent across any real corpus. "DCSync" appears as <code>dcsync</code>, <code>lsadump::dcsync</code>, <code>IDL_DRSGetNCChanges</code>, <code>GetNCChanges</code>, and the raw GUIDs <code>1131f6aa</code> and <code>1131f6ad</code> — all referring to the same underlying attack. A query containing only "dcsync" misses documents using the API-level terminology.</p>
+<p>The expansion layer handles this through YAML-loadable rules. Each rule defines trigger phrases and a set of needle terms injected into the retrieval query. The DCSync rule alone injects 12 alternates, covering Mimikatz command syntax, DS-Replication API names, and the specific GUIDs for both "Get-Changes" and "Get-Changes-All" permissions. Rules are configurable at runtime without touching the codebase.</p>
+<hr class="wp-block-separator has-alpha-channel-opacity"/>
+<p><strong>The Gold Standard Boost</strong></p>
+<p>Raw retrieval could get me into the right area, but it still missed the best answer too often. For the high-confidence detection cases, that wasn't good enough.</p>
+<p>For detection engineering queries, there is a curated file of validated SPL blocks covering specific techniques — DCSync, Kerberoasting, LSASS dumping, ADCS abuse, Pass-the-Hash, and about 100 others. These need to surface deterministically when the query matches, not probabilistically based on cosine similarity.</p>
+<p>The gold boost function runs artifact signature matching against the query before the main retrieval pass. Signatures are defined as groups of indicator terms. For DCSync: one group contains <code>["event id 4662", "eventcode=4662"]</code>, another contains the replication GUIDs, another contains <code>["drsuapi", "getncchanges", "secretsdump"]</code>. If enough groups match, the corresponding gold record is injected directly to the top of the context window, bypassing the scoring pipeline.</p>
+<p>If the query is clearly DCSync, I want the best DCSync block in the context every time.</p>
+<p>The gold sections file uses two-pass indexing: <code>Tool:</code> field aliases first (high confidence), then body-text scan for any unclaimed aliases. This prevents a single block from being claimed by multiple overlapping aliases during startup.</p>
+<hr class="wp-block-separator has-alpha-channel-opacity"/>
+<p><strong>The Reranker</strong></p>
+<p>After hybrid retrieval produces 60 candidate chunks, Qwen3-Reranker-0.6B scores each query-document pair. This is a generative reranker that produces relevance scores by extracting the logit difference between "yes" and "no" tokens from the causal language model, not a CrossEncoder with a classification head. It runs in batches of 16 and returns the top 6 of 60 candidates.</p>
+<pre><code># hybrid_query.py — Qwen3-Reranker yes/no logit extraction
+
+# Generative reranker: P(yes | query, document)
+# Extracts probability from the yes/no token logits
+self.token_true_id  = tokenizer.convert_tokens_to_ids("yes")
+self.token_false_id = tokenizer.convert_tokens_to_ids("no")
+
+scores = torch.softmax(
+    logits[:, [self.token_true_id, self.token_false_id]], dim=-1
+)[:, 0]  # P(yes)</code></pre>
+<p>This stage consistently recovers chunks that ranked poorly on cosine similarity but are genuinely the best answer — a common failure mode when the query phrasing diverges from the document's vocabulary.</p>
+<hr class="wp-block-separator has-alpha-channel-opacity"/>
+<p><strong>Where it broke</strong></p>
+<p>Here’s where the system broke.</p>
+<p>The first one was the dual pipeline split. I had two separate retrieval/generation paths in <code>process_query()</code>. One path ran the actual RAG flow. The other kicked in when folder filters were selected, bypassed the reranker, called <code>generate_response()</code> with <code>is_rag=False</code>, and even told the model to fall back to its own knowledge when context was weak. In other words, the normal workflow was silently steering people into the broken path. I wasn't just getting bad answers. I had built a hallucination lane and wired it into the UI.</p>
+<p>Another one was pure math, which somehow made it worse. ChromaDB was returning cosine distance in [0,2], and I treated it like similarity. The conversion in the code was wrong. No crash, no warning, just rankings that looked believable enough to trust until you stared at them long enough. Every score downstream was off.</p>
+<p>Then there was the WEBSCRAPED mess, which was the real nightmare. I had about 20,000 low-quality web-scraped chunks in the index. When I sanity-checked queries like AS-REP roasting with Impacket, DCSync with Mimikatz, and Kerberoasting with <code>GetUserSPNs.py</code>, the top result for all three was the same useless Pupy C2 article. Then I checked the similarities and realized it was sitting in basically the same band for everything — including "Python programming tutorial" and even "weather forecast." At that point it was obvious what had happened: the instruction prefix had compressed a huge chunk of the corpus into the same fuzzy similarity blob, and the WEBSCRAPED folder was winning purely because there were 20,000 chances for mediocrity to float to the top. I deleted it. That fix did more than half the clever retrieval work combined.</p>
+<p>The reranker config pointed to a directory that didn’t exist. That meant the reranker never loaded, and the system silently fell back to raw retrieval order. I fixed the path and added a startup health check so that kind of failure would be obvious immediately.</p>
+<p>I also had the reranker wired through the wrong inference path at first. I treated Qwen3-Reranker-0.6B like a CrossEncoder. It isn't one. It's a causal LM doing yes/no logic extraction. That one only surfaced because I finally sat down with the model card and tested known-good query/document pairs instead of assuming the wrapper class was fine.</p>
+<p>The retry logic was another self-inflicted problem. I had it set to retry when the model said things like “I don’t have” or “I cannot find,” which is exactly what it should say when the context is insufficient. The retry path then re-ran generation without context, which turned a correct refusal into a fabricated answer. I cut it back so retry only fires on structurally busted output.</p>
+<p>One thing that surprised me: raw course notes retrieved fine and still produced weaker answers than the gold-formatted records. Same general content, very different output quality. Once I gave the model structured fields like command, flags, prerequisites, expected output, and OPSEC notes, the answers got sharper fast. That wasn't some abstract embedding issue. The structure itself was doing work.</p>
+<hr class="wp-block-separator has-alpha-channel-opacity"/>
+<p><strong>The query that made the improvement obvious</strong></p>
+<p>The cleanest before-and-after test was DCSync detection with Windows Security logs.</p>
+<p>Earlier in the project, that query was returning the wrong kind of context entirely. I’d ask for DCSync and get back top hits like Pupy C2, CyberGate RAT strings, Cobalt Strike malleable profiles, NetSupport, and Empire instead of anything tied to replication abuse. The resulting SPL looked plausible on the surface, but it was missing the core pieces: correct Event IDs, replication GUIDs, and source grounding.</p>
+<p>After the fixes, the same query finally started returning the kind of answer I wanted. The gold block fired, the DCSync GUIDs were there, the reranker was actually doing its job, and the output included <code>EventCode 4662</code>, the replication properties, the <code>4624/4672</code> pivot, MITRE mapping, and tuning notes that sounded like they came from somebody who had actually worked the detection. </p>
+<hr class="wp-block-separator has-alpha-channel-opacity"/>
+<p><strong>How I tested it, and where it still lies</strong></p>
+<p>I tested it with twelve queries. Eight were in the lane I actually built this for: detection engineering and AD pentesting. Four were there on purpose to expose the edge of the system.</p>
+<p>The in-scope set did well enough that I’d actually use the system. DCSync detection was strong, Kerberoasting held up, and LSASS dump detection via <code>comsvcs.dll</code> came back clean. Golden Ticket was mostly right, though the <code>TicketEncryptionType</code> handling was a little brittle, and AS-REP roasting plus hashcat syntax also landed well. <code>ESC8</code> was decent, <code>GenericAll</code> pathing was mostly right, and the delegation answers were solid enough that this is the part of the project I trust.</p>
+<p>The out-of-scope or weak areas were more useful than the good scores. NetSupport artifacts were partial. The Volatility 3 process injection question fell apart because the corpus had lecture-style prose instead of command-first material. And one abstract detection prompt about "blending into normal traffic" got answered with a technically decent NTDS shadow-copy detection — <code>vssadmin</code>, <code>diskshadow</code>, <code>ntdsutil</code>, ESENT event codes — that had almost nothing to do with the actual question. That kind of miss is dangerous because it looks competent at a glance.</p>
+<p>The most annoying hallucination in the whole set was the GenericAll answer expanding RBCD to "Remote Bitlocker Key Disclosure." The actual abuse logic after that was still mostly right. That kind of failure is what makes these systems hard to trust at a glance.</p>
+<p>What mattered more than the score was where the system still failed. When the corpus is strong and the query stays inside the lane I tuned for, the system is useful. Outside that lane, it can still produce polished nonsense.</p>
+<hr class="wp-block-separator has-alpha-channel-opacity"/>
+<p><strong>What Still Needs Work</strong></p>
+<p>The Whoosh side still has a stale-index problem. If I update the corpus and skip the rebuild step, BM25 can quietly serve old state with no obvious warning. That's not a hard bug to understand, but it's the kind that wastes time because the system doesn't look broken.</p>
+<p>The multi-turn state handling is still a single-user hack. Right now the session-state FSM is just a global dictionary. Fine on a local box. Bad idea anywhere else.</p>
+<p>The <code>&lt;think&gt;...&lt;/think&gt;</code> cleanup also annoys me. It works, but I'm handling it with regex in the app layer when it really belongs in the serving layer. Any time you're regex-stripping model output after the fact, you're admitting part of the stack is in the wrong place.</p>
+<p>And the procedural coverage gate still isn't tight enough. The Volatility question should have been blocked instead of dressed up with generic prose. If the retrieved material doesn't contain command syntax, paths, or real procedural signals, I want the system to stop pretending otherwise.</p>
+<p>What I trust now is that I know where the system helps and where it starts bluffing. That's a better place to be than having a model that sounds polished and gives you no clue when it's making things up. </p>
+
+
+          <p class="post-back"><a href="/">&larr; Back to Blog</a></p>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>&copy; byevincent &mdash; <a href="https://github.com/byevincent" target="_blank" rel="noreferrer">GitHub</a></p>
+      </div>
+    </footer>
+
+    <script src="/js/main.js"></script>
+  </body>
+</html>

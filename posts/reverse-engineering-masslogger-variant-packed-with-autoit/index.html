@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Reverse Engineering Masslogger Variant Packed with AutoIt — byevincent</title>
+    <meta property="og:title" content="Reverse Engineering Masslogger Variant Packed with AutoIt">
+    <meta property="og:description" content="Overview Stage 1 - AutoIt Dropper (script.au3) Stage 2 – DLL Loader (740b0000.clr.dll) Stage 3 – Decrypted Payload Execution (RegSvcs.exe) Volatility Memory Analysis - Manual PE Mapping Legitimate…">
+    <meta property="og:image" content="https://byevincent.xyz/img/2025/05/screenshot_3.png">
+    <meta property="og:url" content="https://byevincent.xyz/posts/reverse-engineering-masslogger-variant-packed-with-autoit/">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary_large_image">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+  </head>
+  <body>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="logo" href="/">byevincent</a>
+        <nav class="nav">
+          <div class="nav-links">
+            <a href="/">Blog</a>
+            <a href="/about/">About</a>
+          </div>
+          <button class="theme-toggle" aria-label="Toggle theme">
+            <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+            <span></span><span></span><span></span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="post-container">
+        <header class="post-header">
+          <h1>Reverse Engineering Masslogger Variant Packed with AutoIt</h1>
+          <div class="meta">By <strong>Vincent Dinh</strong> &bull; <time datetime="2025-05-22">May 22, 2025</time> &bull; <span class="tag">Malware</span></div>
+        </header>
+        <article class="post-article">
+
+          
+<figure><img alt="" src="/img/2025/05/screenshot_3.png"/></figure>
+<ol><li><a class="wp-block-table-of-contents__entry" href="#overview">Overview</a><ol><li><a class="wp-block-table-of-contents__entry" href="#stage-1-autoit-dropper-script-au3">Stage 1 - AutoIt Dropper (script.au3)</a></li><li><a class="wp-block-table-of-contents__entry" href="#stage-2-dll-loader-740b0000-clr-dll">Stage 2 – DLL Loader (740b0000.clr.dll)</a></li><li><a class="wp-block-table-of-contents__entry" href="#stage-3-decrypted-payload-execution-regsvcs-exe">Stage 3 – Decrypted Payload Execution (RegSvcs.exe) </a><ol><li><a class="wp-block-table-of-contents__entry" href="#volatility-memory-analysis-manual-pe-mapping">Volatility Memory Analysis - Manual PE Mapping</a><ol><li><a class="wp-block-table-of-contents__entry" href="#legitimate-ntdll-dll-locations">Legitimate ntdll.dll Locations</a></li><li><a class="wp-block-table-of-contents__entry" href="#suspicious-rwx-memory-region-at-0x400000">Suspicious RWX Memory Region at 0x400000</a></li><li><a class="wp-block-table-of-contents__entry" href="#not-listed-in-loader-table">Not Listed in Loader Table</a></li><li><a class="wp-block-table-of-contents__entry" href="#pe-structure-shellcode-confirmed-malfind">PE Structure + Shellcode Confirmed (malfind)</a></li></ol></li></ol></li><li><a class="wp-block-table-of-contents__entry" href="#network-analysis">Network Analysis</a><ol><li><a class="wp-block-table-of-contents__entry" href="#dns-resolution-and-ip-rotation">DNS Resolution and IP Rotation</a></li><li><a class="wp-block-table-of-contents__entry" href="#connection-behavior">Connection Behavior</a></li></ol></li><li><a class="wp-block-table-of-contents__entry" href="#yara-rules">YARA Rules</a><ol><li><a class="wp-block-table-of-contents__entry" href="#autoit-evasive-loader">AutoIt_Evasive_Loader</a></li><li><a class="wp-block-table-of-contents__entry" href="#evasive-dotnet-payload">Evasive_DotNet_Payload</a></li></ol></li><li><a class="wp-block-table-of-contents__entry" href="#masslogger-attribution">MassLogger Attribution</a></li><li><a class="wp-block-table-of-contents__entry" href="#ioc-list">IOC List</a></li><li><a class="wp-block-table-of-contents__entry" href="#tools-used">Tools Used</a></li></ol></li></ol>
+<h1 class="wp-block-heading" id="overview">Overview</h1>
+<p>This blog documents the reverse engineering of a staged malware sample tagged as MassLogger / Snakelogger variant. The original file was retrieved from <a class="" href="https://bazaar.abuse.ch/">MalwareBazaar</a> and analyzed through a hybrid static and dynamic workflow involving memory dumping, emulation, and custom detection engineering.</p>
+<p>Sample Details:</p>
+<ul>
+<li><strong>Filename</strong>: <code>NEWORDER.exe</code></li>
+<li><strong>First Seen:</strong> 2025-01-15 17:07:30 UTC</li>
+<li><strong>SHA256</strong>: <code>e3140471b8e10e218754105e8fe4305bd7045f0f1da7eee586b07e5cfe4206b5</code></li>
+<li><strong>Tags</strong>: <code>masslogger</code>, <code>snakekeylogger</code>, <code>stealer</code>, <code>autoit</code>, <code>regsvcs</code></li>
+<li><strong>Sandbox Behavior</strong>: Identified by ANY.RUN as <strong>SnakeKeylogger</strong>, with observed use of <code>RegSvcs.exe</code> for DLL execution, beaconing to <code>checkip.dyndns.org</code>, and system recon via WMI and registry access.</li>
+</ul>
+<p>The binary is a compiled AutoIt dropper containing an obfuscated payload stored in the variable <code>$FPPRUULVXM</code>. Decryption is performed using a custom function <code>AJZIWSIBC()</code>, which implements XOR-based arithmetic on long numeric strings, a common pattern in AutoIt-based malware. Once decrypted, a <code>.NET</code> DLL (<code>740b0000.clr.dll</code>) is dropped and executed via <code>RegSvcs.exe</code>. This DLL then decrypts and injects a third-stage shellcode payload into memory.</p>
+<p>The investigation used: </p>
+<ul>
+<li><strong>PE-Sieve</strong> to extract the memory-mapped DLL</li>
+<li><strong>IDA Pro</strong> and <strong>x64dbg</strong> to reverse and trace functions (<code>sub_740C1C96</code>, <code>sub_740C2045</code>)</li>
+<li><strong>Speakeasy</strong> and <strong>scdbg</strong> for shellcode emulation attempts (ultimately inconclusive)</li>
+<li><strong>YARA</strong> to match known traits and author custom rules for detection</li>
+</ul>
+<figure><img alt="" src="/img/2025/05/image.png"/><figcaption class="wp-element-caption">Figure 1: Detect It Easy detecting AutoIt</figcaption></figure>
+<h2 id="stage-1-autoit-dropper-script-au3">Stage 1 - AutoIt Dropper (script.au3)</h2>
+<p>The first stage of this malware is a compiled AutoIt executable named <code>NEWORDER.exe</code>. To analyze its behavior, the binary was unpacked using <strong>AutoIt-Ripper</strong>, which extracted an embedded script into a readable <code>script.au3</code> file.</p>
+<p>At the top of this script, a custom decryption function named <code>AJZIWSIBC()</code> is defined:</p>
+<pre>Func AJZIWSIBC ( $JCAYYEU , $OCDHLSA )
+    Local $IWUAXZNCM = ""
+    For $VWHHUCUWIZS = 1 To StringLen ( $JCAYYEU )
+        $IWUAXZNCM &amp;= Execute ( _
+            "Chr(Asc(StringMid($jcayyeu, $vwhhucwizs, 1)) - Mod($ocdhlsa + $vwhhucwizs, 256))" )
+    Next
+    Return $IWUAXZNCM
+EndFunc</pre>
+<p>This function performs a position-dependent arithmetic transformation on each character of the input string, dynamically evaluating it using <code>Execute()</code>. Unlike fixed-key XOR encoding, this technique introduces a per-character offset based on its position and a supplied key, making it harder to decode without full emulation or reversing.</p>
+<p>Following this definition, the script constructs a large obfuscated payload by repeatedly appending numeric-looking strings to a global variable named <code>$FPPRUULVXM</code>. For example:</p>
+<pre>Global $FPPRUULVXM = "56184065205618406525..."
+$FPPRUULVXM &amp;= "52056184065205618406525..."
+$FPPRUULVXM &amp;= "84065205618406525..."
+; (spans many lines and hundreds of KB of encoded content)</pre>
+<p>These segments contain <strong>numeric ASCII sequences</strong>, not actual binary data. Each 9-digit chunk encodes one character, typically using the last three digits (e.g., <code>652</code>), which are interpreted and transformed at runtime. The full blob is passed to <code>AJZIWSIBC()</code> with a hardcoded key of <code>4</code>.</p>
+<p>None of the decoded content exists statically in the script. All transformation occurs during execution, allowing the loader to bypass static analysis and signature-based detection. The decrypted code is not written to disk. Instead, execution is handed off to <code>RegSvcs.exe</code>, a signed Microsoft binary, which loads the resulting <code>.NET</code> DLL (<code>740b0000.clr.dll</code>) directly into memory.</p>
+<pre>Global $SJNWPER = Call ( AJZIWSIBC ( "J~lk~~p" , 4 ) , $JAYFUDCI &amp; "(@TempDir &amp; ""\overfertilize"", 18)" )</pre>
+<p>During runtime, the script decodes this payload entirely in memory using the <code>AJZIWSIBC()</code> function. The resulting blob is then saved to <code>%TEMP%\overfertilize</code> and executed using <code>RegSvcs.exe</code>, a trusted signed Microsoft binary. This approach avoids writing any static payloads or recognizable binary headers to disk during initial stages, effectively bypassing many forms of static analysis and signature-based detection.</p>
+<p>The decrypted data does not start with a standard <code>MZ</code> header, suggesting it may be shellcode, an encrypted .NET assembly, or a second-layer loader. The file <code>overfertilize</code> is ultimately loaded as a <code>.NET</code> DLL via <code>RegSvcs.exe</code>, marking the transition into Stage 2: a memory-resident payload.</p>
+<h2 id="stage-2-dll-loader-740b0000-clr-dll">Stage 2 – DLL Loader (<code>740b0000.clr.dll</code>)</h2>
+<p>The second stage of the malware chain is a memory-resident .NET DLL (<code>740b0000.clr.dll</code>) executed by <code>RegSvcs.exe</code>, recovered using PE-Sieve during runtime. Although it was unpacked from an AutoIt wrapper and presents as a .NET module, analysis shows it lacks a valid CLR header and does not invoke typical CLR bootstrap routines. This suggests it operates outside the managed runtime, likely through unmanaged shellcode or custom loader stubs. Furthermore, the DLL does not import any Windows API functions via the import table, instead relying on pointer arithmetic, jump tables, and low-level constructs to resolve functionality dynamically, evading traditional static analysis.</p>
+<p>The Stage 2 DLL does not import Windows API functions via the import table; instead, it likely resolves necessary APIs dynamically at runtime. This inference is supported by downstream use of functions like <code>CreateThread</code>, despite their absence in static imports, implying runtime export parsing or pointer-based resolution.</p>
+<figure><img alt="" src="/img/2025/05/image-4.png"/><figcaption class="wp-element-caption">Figure 2: Jump table within the .data section at 0x747F4110 referencing constant DWORDs used by the loader. These values are indirectly referenced during runtime to influence execution flow, likely as part of the pointer resolution or dispatch logic.</figcaption></figure>
+<p>Initially, the loader employs a compact jump-table located at <code>.data:747F4110–747F411C</code> (Figure 2), where four DWORD entries direct execution flow. These DWORD values facilitate indirect jumps to specialized staging routines such as handling "small chunks" or "large regions," contributing to variant handling and stealth by preventing direct API or memory access.</p>
+<p>Each DWORD in the jump table corresponds to a loader routine, guiding execution based on runtime conditions. For instance:</p>
+<ul>
+<li><code>+0x04</code> → <code>0x740C1C96</code>: initiates memory allocation and staging via <code>sub_740C1C96</code>.</li>
+<li><code>+0x10</code> → <code>0x740C2045</code>: responsible for XOR decryption of the embedded payload.</li>
+</ul>
+<p>Disassembly of <code>sub_740C1C96</code> confirmed these runtime jump destinations: the loader reads thread-local flags via <code>fs:[0xE24]</code>, which determine whether execution is routed to <code>sub_740C2045</code>. </p>
+<figure><img alt="" src="/img/2025/05/image-5.png"/><figcaption class="wp-element-caption">Figure 3: Entry function <code>sub_740C1C96</code> retrieves a global <strong>staging pointer</strong> from <code>.data:747F4010</code>, initializes registers, and invokes <code>sub_740C2045</code>. This begins the process of pointer validation and stage execution.</figcaption></figure>
+<p>The core dispatcher, sub_740C1C96 (Figure 3), merges TEB access and flag masking into a unified narrative. It begins by establishing thread context, pushing EBX/EDI/ESI registers, and retrieving a global staging pointer from .data:747F4010. If ECX is nonzero, it calls sub_740C20C4, a minimal helper accessing thread-specific memory via the TEB (fs:[0xE24]), crucial for anti-debugging and state tracking. This context then informs a per-thread flags operation—masked by 0x5F—before routing execution through the aforementioned jump-table based on the thread-specific state.</p>
+<figure><img alt="" src="/img/2025/05/image-8.png" style="width:310px;height:auto"/><figcaption class="wp-element-caption">Figure 3a: TEB access via <code>fs:[0xE24]</code> in <code>sub_740C20C4</code>. This lightweight helper function returns a thread-local structure that the loader uses to validate or initialize thread-specific memory, aiding in anti-debugging and state tracking.</figcaption></figure>
+<figure><img alt="" src="/img/2025/05/image-6.png"/><figcaption class="wp-element-caption">Figure 4: Core loader logic within <code>sub_740C2045</code>, where it uses atomic compare-and-exchange (<code>LOCK CMPXCHG</code>) to safely write to shared memory. Execution paths populate per-thread structures and conclude with a transition to <code>sub_7415BBB4</code>, the final preparatory stage.</figcaption></figure>
+<p>Execution then transitions to sub_740C2045, streamlining its primary logic through LOCK CMPXCHG instructions. Here, an atomic compare-and-exchange sequence safely claims memory slots, enabling thread-safe staging without external APIs. This subroutine notably handles entropy reseeding by recursing into the earlier mentioned sub_740C20C4, and concludes via a direct tail-call to sub_7415BBB4, orchestrating the final memory preparation stage.</p>
+<figure><img alt="" src="/img/2025/05/image-7.png"/><figcaption class="wp-element-caption">Figure 5: Context preparation in <code>sub_7415BBB4</code>, where structured exception handling is established and values are pushed to the stack. The loader writes pointer-based context into stack variables before transitioning control to the next stage via a call to <code>sub_740C20C0</code>.</figcaption></figure>
+<p><code>Sub_7415BBB4</code> (Figure 5) emphasizes anti-debugging through structured exception handling. It sets up a structured-exception frame via <code>__EH_prolog3_catch</code>, establishing crash-resilience and anti-debugging defenses. Stack variables receive pointer-based context before transitioning control to <code>sub_740C2C00</code>, verifying the preparation of the memory region before restoring registers and transitioning control to the prepared <code>RWX</code> region.</p>
+<p>Throughout Stage 2, the loader operates without traditional WinAPI imports, performing all operations through calculated pointer resolutions, interlocked memory instructions, and structured exception frames, significantly complicating static and dynamic analysis. </p>
+<p>Importantly, Stage 2 does not initiate any observable network connections. This was validated via FakeNet and Wireshark during controlled execution. All external communication—such as DNS resolution and TLS handshakes to C2 servers—is deferred until Stage 3, after payload decryption and injection.</p>
+<h2 id="stage-3-decrypted-payload-execution-regsvcs-exe">Stage 3 – Decrypted Payload Execution (<code>RegSvcs.exe</code>)<br/></h2>
+<p>After the AutoIt dropper launches <code>RegSvcs.exe</code>, execution is passed to a custom loader embedded in a .NET DLL. To observe the final stage of execution and extract payload artifacts, we attach to <code>RegSvcs.exe</code> using <code>x32dbg</code> after it has already begun staging the payload in memory.</p>
+<p>Once attached, we pause the process and set a breakpoint on <strong><code>CreateThread</code></strong> - a common API used to invoke in-memory payloads. When this breakpoint is hit, we inspect the value pushed as the <strong><code>lpStartAddress</code></strong> parameter, which points to the memory address where execution of the next stage will begin.</p>
+<figure><img alt="" src="/img/2025/05/image-11.png"/><figcaption class="wp-element-caption">Figure 6: <code>x32dbg</code> pauses on <code>CreateThread</code>. The argument pushed to the stack (lpStartAddress) points to the thread entry address of the decrypted payload.</figcaption></figure>
+<p>Following this <code>lpStartAddress</code> into the Memory Map leads us to a surprising location: the address resides within the <strong><code>.text</code> </strong>section of <strong><code>ntdll.dll</code></strong>. This suggests the loader did not use traditional shellcode injection via <code>VirtualAlloc</code> and <code>memcpy</code>, but instead unpacked the decrypted payload directly into the code section of a dropped or side-loaded DLL.</p>
+<figure><img alt="" src="/img/2025/05/image-12.png"/><figcaption class="wp-element-caption">Figure 7: The address passed to <code>CreateThread</code> resides in the <code>.text</code> section of <code>ntdll.dll</code>, which has standard executable permissions (ER---) and is mapped as an image file. This implies the decrypted payload was embedded in or unpacked into this module.</figcaption></figure>
+<p>The <code>.text</code> section was dumped and analyzed. Although not marked as RWX or residing in anonymous memory, this region exhibited all the expected hallmarks of a final payload: high-entropy code, embedded plaintext strings, and behavioral indicators common in stealer malware and C2 stagers. In x32dbg, the <code>CreateThread</code> start address appeared to reference <code>ntdll.dll</code> (0x77231000), but Volatility later confirmed that the actual payload was mapped at 0x400000 — a manually mapped PE not listed in the loader’s module list. This mislabeling is a deliberate evasion tactic, allowing malicious code to masquerade as a trusted module. </p>
+<p>A manual diff between the memory-mapped <code>.text</code> region at <code>0x400000</code> and the legitimate <code>ntdll.dll</code> at <code>0x771c0000</code> confirmed this was not a real image. The fake section lacked standard syscall exports like <code>ZwQueryInformationProcess</code> or <code>RtlExitUserThread</code>, and instead contained entirely custom routines such as <code>sub_74207D0F</code>, <code>sub_7439C4F0</code>, and <code>sub_744665CA</code>. These functions implement complex control flow, SEH-based anti-debugging, and indirect function resolution.</p>
+<p>Closer inspection of these routines clarifies their respective roles: <code>sub_74207D0F</code> functions as a dispatcher, walking through a memory-based function pointer table and calling handlers based on runtime values. This structure suggests a modular loader architecture. <code>sub_7439C4F0</code> wraps multiple validation and setup routines inside an SEH-controlled block, with indirect pointer use and stack cookie protection — behavior typical of anti-debug and crash-safe stagers. <code>sub_744665CA</code> manipulates a context block at <code>[esi+10h]</code> and <code>[esi+14h]</code>, sets transition flags, and invokes further payloads using a call chain. It also contains <code>DebugBreak</code> and <code>int 3</code>, confirming its anti-analysis design.</p>
+<p>I noticed that the .<strong>text </strong>section of <code>ntdll.dll</code> having executable and read permissions was highly unusual even though the address of <strong><code>CreateThread</code></strong> matched the memory address in the <code>x32dbg</code> Memory Map. <code>ntdll.dll</code>'s .<code>text</code> section is typically protected as <code>PAGE_EXECUTE_READ</code>, meaning it's read-only and executable but not writable.</p>
+<p>Further reversing revealed the internal structure of these routines. <code>sub_74207D0F</code> acts as a dispatcher that walks through a custom pointer table, selecting handlers based on runtime memory state. <code>sub_7439C4F0</code> wraps its logic in SEH and performs staged control logic that culminates in conditional handler calls, likely to decoding or setup functions. Finally, <code>sub_744665CA</code> manipulates fields such as <code>[esi+10h]</code> and <code>[esi+14h]</code>, invokes lower-level stagers, and includes intentional <code>DebugBreak</code> and <code>int 3</code> instructions, signaling anti-analysis behavior and payload staging.</p>
+<h3 id="volatility-memory-analysis-manual-pe-mapping">Volatility Memory Analysis - Manual PE Mapping</h3>
+<p>Memory analysis with Volatility confirmed that the payload was not executing from the legitimate ntdll.dll. Instead, the second stage loader manually mapped a PE file residing at <code>0x400000</code> into the memory region to appear as if it belonged to <code>ntdll.dll</code>. </p>
+<h4 id="legitimate-ntdll-dll-locations">Legitimate <code>ntdll.dll</code> Locations</h4>
+<p>To establish the loader's known modules using <code>ldrmodules</code>:</p>
+<figure><img alt="" src="/img/2025/05/4.png"/><figcaption class="wp-element-caption">Figure 8: Legitimate <code>ntdll.dll</code> is loaded at standard base addresses, confirming no tampering in its mapped memory.</figcaption></figure>
+<p>Result: </p>
+<ul>
+<li>ntdll.dll is correctly loaded at:
+<ul>
+<li>0x771c0000 - SysWOW64</li>
+<li>0x7ffe63d5xxxx - WoW64 transition space</li>
+</ul>
+</li>
+</ul>
+<p>This confirms that <strong>the real <code>ntdll.dll</code> is present and untouched</strong> in expected memory regions.</p>
+<h4 id="suspicious-rwx-memory-region-at-0x400000">Suspicious RWX Memory Region at 0x400000</h4>
+<p>Next, I used <code>vadinfo</code> to examine all memory regions mapped within the process:</p>
+<figure><img alt="" src="/img/2025/05/screenshot_1.png"/><figcaption class="wp-element-caption">Figure 9: Memory region <code>0x400000–0x41dfff</code> is RWX and has no file mapping, strongly indicating injected or manually mapped code.</figcaption></figure>
+<p>Result: </p>
+<ul>
+<li>Memory range: <code>0x400000 – 0x41dfff</code></li>
+<li>Protection: <code>PAGE_EXECUTE_READWRITE</code></li>
+<li>Mapped file: <code>N/A</code></li>
+</ul>
+<p>Red Flags:</p>
+<ul>
+<li><strong>RWX permissions</strong> are rarely legitimate, and almost always signal potential code injection.</li>
+<li>The absence of a mapped file means this region <strong>was not loaded via standard OS mechanisms</strong>.</li>
+</ul>
+<h4 id="not-listed-in-loader-table">Not Listed in Loader Table</h4>
+<p>To further validate this region’s origin, I rechecked <code>ldrmodules</code> for any entry corresponding to <code>0x400000</code>:</p>
+<figure><img alt="" src="/img/2025/05/3.png"/><figcaption class="wp-element-caption">Figure 10: The <code>0x400000</code> region does not appear in the Windows loader module list, supporting manual mapping over legitimate loading.</figcaption></figure>
+<p>Result:</p>
+<ul>
+<li>No matching module was found, seen in the last column with the <code>MappedPath</code> value as N/A - proving it has no backing file. </li>
+</ul>
+<p>This confirms <code>0x400000</code> is not part of any module the Windows loader is aware of, ruling out legitimate libraries like <code>ntdll.dll</code>, <code>kernel32.dll</code>, etc.</p>
+<h4 id="pe-structure-shellcode-confirmed-malfind">PE Structure + Shellcode Confirmed (malfind)</h4>
+<p>Finally, I examined the contents of the suspicious region with <code>malfind</code>:</p>
+<figure><img alt="" src="/img/2025/05/screenshot_1-2.png"/><figcaption class="wp-element-caption">Figure 11: <code>malfind</code> reveals a valid PE header and shellcode-like instructions at <code>0x400000</code>, confirming execution of a reflectively loaded payload.</figcaption></figure>
+<p>Result:</p>
+<ul>
+<li>An <strong><code>MZ</code> header</strong> was found at <code>0x400000</code> → confirms PE structure.</li>
+<li>Disassembly revealed a typical shellcode preamble including stack manipulation (<code>pop edx</code>), arithmetic instructions (<code>add [reg], al</code>), and padding (<code>nop</code>).</li>
+<li>This region contains a <strong>manually mapped, reflectively injected PE file</strong>.</li>
+</ul>
+<p>Although no breakpoint was set on <code>VirtualAlloc</code> or <code>NtMapViewOfSection</code>, the combination of RWX memory, a valid MZ header, and absence from the loader list suggests that the payload was reflectively loaded. Function <code>sub_740C1C96</code> is a likely candidate for this behavior based on its use of memory copying and pointer-based control logic.</p>
+<h2 id="network-analysis">Network Analysis</h2>
+<p>Wireshark was used to monitor network traffic during execution of the AutoIt dropper and the subsequent <code>RegSvcs.exe</code> process. Shortly after launch, the malware attempted outbound connections to public IP services including <code>checkip.dyndns.org</code> and <code>reallyfreegeoip.org</code>. This behavior is consistent with staging routines where the payload attempts to determine the host’s external IP address and geolocation before progressing to later stages of execution.</p>
+<h3 id="dns-resolution-and-ip-rotation">DNS Resolution and IP Rotation</h3>
+<p>Within seconds of execution, DNS queries were issued for both domains. The response from <code>checkip.dyndns.org</code> included multiple rotating A records, such as <code>132.226.8.169</code>, <code>158.101.44.242</code>, and <code>193.122.130.0</code>.</p>
+<figure><img alt="" src="/img/2025/05/image-13.png"/><figcaption class="wp-element-caption">Figure 12: <em>DNS response for <code>checkip.dyndns.org</code>, showing several IP addresses returned in sequence.</em><br/></figcaption></figure>
+<p>Similar DNS traffic was recorded for <code>reallyfreegeoip.org</code>, which resolved to Cloudflare IPs including <code>104.21.64.1</code> and <code>104.21.48.1</code>, as well as multiple IPv6 addresses. This behavior reflects dynamic infrastructure usage to complicate static domain-to-IP detection.</p>
+<figure><img alt="" src="/img/2025/05/image-14.png"/><figcaption class="wp-element-caption">Figure 13: DNS resolution and TCP connection to <code>reallyfreegeoip.org</code>, with an SNI match confirmed in the TLS Client Hello.</figcaption></figure>
+<h3 id="connection-behavior">Connection Behavior</h3>
+<p>Following the DNS resolution, outbound TCP connections were initiated to the resolved IPs on port 443. Wireshark captured a complete TLS handshake for <code>reallyfreegeoip.org</code>, with the Server Name Indication field in the Client Hello explicitly confirming the target domain. TLS version 1.3 was used in all observed handshakes.</p>
+<p>No application-layer data was visible in these sessions, which is expected given the encrypted channel. However, the sequence—DNS resolution, TLS handshake, and the use of known IP profiling services—indicates that the malware performs an initial environmental fingerprinting step. This may involve public IP registration, geolocation logging, or basic connectivity verification, all of which are common in commodity malware and staged delivery frameworks.</p>
+<h2 id="yara-rules">YARA Rules</h2>
+<p>Based on the static and behavioral traits uncovered during analysis, the following YARA rules were developed to detect both the loader and its injected payload.</p>
+<h3 id="autoit-evasive-loader">AutoIt_Evasive_Loader</h3>
+<pre>import "pe"
+
+rule AutoIt_Evasive_Loader
+{
+    meta:
+        author = "Vincent Dinh"
+        description = "Detects a compiled AutoIt loader using potential anti-debugging and TLS callbacks"
+        version = "1.1"
+        created = "2025-05-21"
+        reference = "SHA256: e3140471b8e10e218754105e8fe4305bd7045f0f1da7eee586b07e5cfe4206b5"
+        tags = "AutoIt, loader, TLS, anti-debug, Go-artifacts"
+        malware_family = "Masslogger"
+
+    strings:
+        // AutoIt traits
+        $autoit_marker1 = "&gt;&gt;&gt;AUTOIT SCRIPT&lt;&lt;&lt;" ascii wide
+        $autoit_marker2 = "#pragma compile" ascii wide
+        $autoit_marker3 = "This is a third-party compiled AutoIt script." ascii wide
+
+        // Go-related strings (suspicious if mixed with AutoIt)
+        $go_build = "Go build" ascii wide
+        $go_runtime = "runtime" ascii wide
+
+        // Anti-debugging artifacts
+        $dbg1 = "IsDebuggerPresent" ascii
+        $dbg2 = "OutputDebugString" ascii
+        $dbg3 = "QueryPerformanceCounter" ascii
+        $dbg4 = "GetTickCount" ascii
+        $dbg5 = { 0F A2 }           // cpuid
+        $dbg6 = { 0F 31 }           // rdtsc
+
+    condition:
+        uint16(0) == 0x5A4D and
+        (
+            2 of ($autoit_marker*) and
+            1 of ($go_*) and
+            4 of ($dbg*)
+        ) and
+        pe.data_directories[9].virtual_address != 0 and
+        pe.data_directories[9].size != 0  // TLS callback presence
+}
+</pre>
+<h3 id="evasive-dotnet-payload">Evasive_DotNet_Payload</h3>
+<pre>import "pe"
+
+rule Evasive_DotNet_Payload
+{
+    meta:
+        author = "Vincent Dinh"
+        description = "Detects a .NET-based evasive payload containing Go strings, anti-debugging, and injection behavior"
+        version = "1.1"
+        created = "2025-05-21"
+        reference = "Dropped by AutoIt loader – 740b0000.clr.dll"
+        tags = ".NET, anti-debug, process-injection"
+        malware_family = "Masslogger"
+
+    strings:
+        // Suspicious Go references in a .NET context
+        $go1 = "Go build" ascii wide
+        $go2 = "runtime" ascii wide
+
+        // Known anti-debugging or evasion APIs
+        $api1 = "IsDebuggerPresent" ascii
+        $api2 = "OutputDebugString" ascii
+        $api3 = "QueryPerformanceCounter" ascii
+        $api4 = "GetTickCount" ascii
+        $api5 = "SetConsoleCtrlHandler" ascii
+        $api6 = "AddVectoredExceptionHandler" ascii
+        $api7 = "SetThreadContext" ascii
+
+        // Timing tricks
+        $ins1 = { 0F A2 }  // cpuid
+        $ins2 = { 0F 31 }  // rdtsc
+
+    condition:
+        uint16(0) == 0x5A4D and
+        1 of ($go*) and
+        5 of ($api*, $ins*)
+}
+</pre>
+<h2 id="masslogger-attribution">MassLogger Attribution</h2>
+<p>The analyzed sample (<code>SHA256: e3140471b8e10e218754105e8fe4305bd7045f0f1da7eee586b07e5cfe4206b5</code>) matches a known <strong>Masslogger variant</strong> listed on MalwareBazaar. Attribution is further supported by:</p>
+<ul>
+<li>Use of an AutoIt dropper for payload staging, a known Masslogger delivery method.</li>
+<li>Reflective memory mapping and jump-table logic in the Stage 2 loader, consistent with modular Masslogger architectures.</li>
+<li>Stage 3 memory-resident payload includes strings such as <code>ClipboardVault</code>, <code>PasswordVault</code>, and <code>FFLogins</code>, aligning with past credential theft functionality seen in Masslogger campaigns.</li>
+<li>Network IOCs include <code>api.telegram.org</code> and <code>reallyfreegeoip.org</code>, which have been repeatedly observed in Masslogger operations.</li>
+<li>Registry and file paths such as <code>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</code>, and <code>%APPDATA%\CloudServices.exe</code>, further reinforce stealer behavior.</li>
+</ul>
+<h2 id="ioc-list">IOC List</h2>
+<p><strong>Sample Metadata</strong></p>
+<ul>
+<li>Initial Dropper: NEWORDER.exe</li>
+<li>Stage 2 Loader: 740b0000.clr.dll</li>
+<li>Shellcode Dump: overfertilize</li>
+<li>Memory Dump Region: regsvcs_77231000.bin</li>
+<li>Analyzed Process: RegSvcs.exe</li>
+</ul>
+<p><strong>File Names</strong></p>
+<ul>
+<li>CloudServices.exe</li>
+<li>MozillagLue.dll</li>
+<li>nss3.dll</li>
+<li>omnibox.dll</li>
+<li>sqlite_master_entry</li>
+<li>UserData.txt</li>
+<li>logins.json</li>
+<li>secserv.dll </li>
+<li>.txt2 </li>
+</ul>
+<p><strong>URLs/Domains</strong></p>
+<ul>
+<li>checkip.dyndns.org</li>
+<li>reallyfreegeoip.org</li>
+<li>api.telegram.org</li>
+</ul>
+<p><strong>Network-Based Indicators</strong></p>
+<ul>
+<li>TLS SNI (Observed in Handshake): reallyfreegeoip.org</li>
+<li>URIs: /sendDocument?chat_id= (Telegram exfiltration endpoint)</li>
+<li>URIs: /xml/70.120.59.240</li>
+<li>URIs: / (default root beacon for checkip service)</li>
+<li>Ports: 443 (HTTPS / TLS)</li>
+<li>TLS Version: TLS 1.3</li>
+<li>User-Agent (Confirmed from Memory): Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR1.0.3705;)</li>
+</ul>
+<p><strong>Internal Vault &amp; Data Artifacts</strong></p>
+<ul>
+<li>UserData.txt</li>
+<li>ClipboardVault </li>
+<li>PasswordVault </li>
+<li>ScreenshotVault </li>
+</ul>
+<p><strong>Credential Harvesting / DB Schema Artifacts</strong></p>
+<ul>
+<li>CREATE TABLE logins</li>
+<li>CREATE TABLE password_notes</li>
+<li>CREATE TABLE insecure_credentials</li>
+<li>RecoveredApplicationAccount</li>
+<li>FFLogins </li>
+<li>KeyLoggerEventArgs </li>
+</ul>
+<p><strong>Registry &amp; Persistence References</strong></p>
+<ul>
+<li>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</li>
+<li>HKLM\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters</li>
+<li>HKCU\Software\Microsoft\Windows Messaging Subsystem\Profiles\Outlook\9375CFF0413111d3B88A00104B2A6676 </li>
+<li>HKLM\SYSTEM\CurrentControlSet\Control\WMI\Security</li>
+<li>SOFTWARE\Classes\Foxmail.url.mailto\shell\open\command </li>
+<li>SOFTWARE\Microsoft\Office\15.0\Outlook\Profiles\Outlook\9375CFF04131111d3B88A00104B2A6676 </li>
+<li>SOFTWARE\Microsoft\Office\16.0\Outlook\Profiles\Outlook\9375CFF04131111d3B88A00104B2A6676 </li>
+<li>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options </li>
+</ul>
+<p><strong>Anti-Debugging &amp; Evasion Strings</strong></p>
+<ul>
+<li>IsDebuggerPresent</li>
+<li>OutputDebugString</li>
+<li>QueryPerformanceCounter</li>
+<li>GetTickCount</li>
+<li>RaiseFailFastException</li>
+<li>SetThreadContext</li>
+<li>AddVectoredExceptionHandler</li>
+<li>GetForegroundWindow</li>
+<li>UnhookWindowsHookEx</li>
+<li>ToUnicodeEx</li>
+<li>GetKeyboardLayout</li>
+<li>MapVirtualKey</li>
+</ul>
+<p><strong>Embedded APIs &amp; System Functions</strong></p>
+<ul>
+<li>GetTokenInformation</li>
+<li>OpenProcessToken</li>
+<li>CryptProtectPromptFlags</li>
+<li>ReadAllBytes</li>
+<li>ReadAllText</li>
+<li>GetWindowText</li>
+<li>TakeScreenshot</li>
+<li>Directory.GetFiles</li>
+<li>Environment.GetFolderPath</li>
+<li>AppDomain.CurrentDomain</li>
+<li>WebClient, SmtpClient, FtpWebRequest</li>
+</ul>
+<p><strong>Other (Application/Service Names &amp; File Paths)</strong></p>
+<ul>
+<li>Foxmail </li>
+<li>Foxmail.exe </li>
+<li>Thunderbird </li>
+<li>Firefox </li>
+<li>Outlook </li>
+<li>Thunderbird\profiles </li>
+<li>FileZilla </li>
+<li>%APPDATA%\FileZilla\recentservers.xml </li>
+<li>%APPDATA%\Thunderbird\Profiles\ </li>
+<li>%APPDATA%\Mozilla\Firefox\Profiles\ </li>
+<li>%APPDATA%\SeaMonkey\Profiles\ </li>
+<li>%APPDATA%\Comodo\IceDragon\Profiles\ </li>
+<li>%APPDATA%\Opera\ </li>
+<li>%APPDATA%\Kometa\User Data\Default\Login Data </li>
+<li>%APPDATA%\Epic Privacy Browser\User Data\Default\Login Data </li>
+<li>%APPDATA%\Nichrome\User Data\Default\Login Data </li>
+<li>%APPDATA%\Amigo\User Data\Default\Login Data </li>
+<li>%APPDATA%\Xpom\User Data\Default\Login Data </li>
+<li>%APPDATA%\BraveSoftware\Brave-Browser\User Data\Default\Login Data </li>
+<li>%APPDATA%\Torch\User Data\Default\Login Data </li>
+<li>%APPDATA%\UCBrowser\User Data_i18n\Default\UC Login Data.18 </li>
+<li>%APPDATA%\Blisk\User Data\Default\Login Data </li>
+<li>%APPDATA%\7Star\User Data\Default\Login Data </li>
+<li>%APPDATA%\xVast\User Data\Default\Login Data </li>
+<li>%APPDATA%\Chedot\User Data\Default\Login Data </li>
+<li>%APPDATA%\Superbird\User Data\Default\Login Data </li>
+<li>%APPDATA%\360Browser\Browser\User Data\Default\Login Data </li>
+<li>%APPDATA%\360Chrome\Chrome\User Data\Default\Login Data </li>
+<li>%APPDATA%\Comodo\Dragon\User Data\Default\Login Data </li>
+<li>%APPDATA%\e360_China\User Data\Default\Login Data </li>
+<li>%APPDATA%\Opera\User Data\Default\Login Data </li>
+<li>%APPDATA%\QIP Surf\User Data\Default\Login Data </li>
+<li>%APPDATA%\BlackHawk\User Data\Default\Login Data </li>
+<li>%APPDATA%\SevinStar\User Data\Default\Login Data </li>
+<li>%APPDATA%\Sleipnir\User Data\Default\Login Data </li>
+<li>%APPDATA%\Iridium\User Data\Default\Login Data </li>
+<li>%APPDATA%\Chromium\User Data\Default\Login Data </li>
+<li>%APPDATA%\orbitum\User Data\Default\Login Data </li>
+<li>%APPDATA%\Uran\User Data\Default\Login Data </li>
+<li>%APPDATA%\Falkon\User Data\Default\Login Data </li>
+<li>%APPDATA%\Iron\User Data\Default\Login Data </li>
+<li>%APPDATA%\Comodo\User Data\Default\Login Data </li>
+<li>%APPDATA%\Amigo\User Data\Default\Login Data </li>
+<li>%APPDATA%\Citrio\User Data\Default\Login Data </li>
+<li>%APPDATA%\CoolNovo\User Data\Default\Login Data </li>
+<li>%APPDATA%\Microsoft Edge\User Data\Default\Login Data </li>
+<li>%APPDATA%\Cent Browser\User Data\Default\Login Data </li>
+<li>%APPDATA%\Ghost Browser\User Data\Default\Login Data </li>
+<li>%APPDATA%\Chromium\User Data\Default\Login Data </li>
+</ul>
+<h2 id="tools-used">Tools Used</h2>
+<ul>
+<li><a href="https://github.com/nazywam/AutoIt-Ripper">AutoIt-Ripper</a> for script extraction</li>
+<li><a href="https://hex-rays.com/ida-free">IDA Free</a> for static disassembly of DLL</li>
+<li><a href="https://x64dbg.com/">x32dbg</a> for live memory introspection</li>
+<li><a href="https://github.com/hasherezade/pe-sieve">PE-Sieve</a> for dumped DLL acquisition</li>
+<li><a href="https://www.wireshark.org/">Wireshark</a> for network telemetry capture</li>
+<li><a href="https://sandsprite.com/blogs/index.php?uid=7&amp;pid=152">scdbg</a> &amp; <a href="https://github.com/mandiant/speakeasy">Speakeasy</a> for shellcode emulation (partial)</li>
+<li><a href="https://github.com/volatilityfoundation/volatility3">Volatility 3</a> for Memory Forensics</li>
+</ul>
+<p></p>
+
+
+          <p class="post-back"><a href="/">&larr; Back to Blog</a></p>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>&copy; byevincent &mdash; <a href="https://github.com/byevincent" target="_blank" rel="noreferrer">GitHub</a></p>
+      </div>
+    </footer>
+
+    <script src="/js/main.js"></script>
+  </body>
+</html>
