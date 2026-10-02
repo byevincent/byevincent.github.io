@@ -10,6 +10,7 @@
     <meta property="og:url" content="https://byevincent.xyz/posts/analyzing-eight-malicious-documents-in-a-single-day-techniques-tools-and-key-findings/">
     <meta property="og:type" content="article">
     <meta name="twitter:card" content="summary_large_image">
+    <script>(function(){try{var t=localStorage.getItem("bv-theme")||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/styles.css">
   </head>
@@ -73,7 +74,7 @@ Collecting data from file: 9d02bf092fdcf44a51ae6e264ec3e3e57afbe79622c92a797e33f
  52.2% (.DOCX) Word Microsoft Office Open XML Format document (23500/1/4)
  38.8% (.ZIP) Open Packaging Conventions container (17500/1/4)
   8.8% (.ZIP) ZIP compressed archive (4000/1)bas</code></pre>
-<h1 class="wp-block-heading" id="b75b">PDF Analysis (RemcosRAT)</h1>
+<h2 class="wp-block-heading" id="b75b">PDF Analysis (RemcosRAT)</h2>
 <p id="1226"><strong>Remcos Remote Access Trojan (RemcosRAT)</strong> is designed to provide full remote control over infected systems. While it is marketed as a legitimate administration tool by its creators, it is frequently abused by cybercriminals for malicious purposes.</p>
 <figure><img alt="" src="/img/2025/01/image-4.png"/><figcaption class="wp-element-caption">I chose RemcosRAT because I had heard of it and it had a signature on Malware Bazaar.</figcaption></figure>
 <p><a href="https://bazaar.abuse.ch/sample/43987e781d3195cb2d75e0a9acca5de1cbd7eefd2010cce9afd897d5e8c9f594/" rel="noreferrer noopener" target="_blank">RemcosRAT Sample</a></p>
@@ -285,7 +286,7 @@ PPDF&gt; object 17
 <li>IOCs: hxxps[://]2012[.]filemail[.]com/api/file/get?filekey=ytyQUUZwEeijkbLbKoMvyf0YvBoqUg4Fufe6zGM0dPsUyU-wFFP0pUcwI9xAZPaEI-rrsI6M0JRZ03-gDQ&amp;pk_vid=0036e245a09a84ae173430670396c326</li>
 </ul>
 <figure><img alt="" src="/img/2025/01/image-5.png" style="width:782px;height:auto"/><figcaption class="wp-element-caption">VirusTotal Comment</figcaption></figure>
-<h1 class="wp-block-heading" id="f52f">RTF Analysis (Formbook)</h1>
+<h2 class="wp-block-heading" id="f52f">RTF Analysis (Formbook)</h2>
 <h2 id="1d54">What are RTFs?</h2>
 <p id="fc24">RTF is primarily a benign document format, it is frequently exploited by attackers due to its ability to embed objects and payloads.</p>
 <ul>
@@ -608,5 +609,7 @@ httpWebRequest.Method = "GET";</code></pre>
     </footer>
 
     <script src="/js/main.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha512-D9gUyxqja7hBtkWpPWGt9wfbfaMGVt9gnyCvYa+jojwwPHLCzUm5i8rpk7vD7wNee9bA35eYIjobYPaQuKS1MQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>if(window.hljs){hljs.highlightAll();}</script>
   </body>
 </html>

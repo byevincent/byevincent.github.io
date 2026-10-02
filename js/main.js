@@ -1,13 +1,8 @@
 document.addEventListener('DOMContentLoaded', function () {
 
-  // Theme toggle
+  // Theme toggle. The initial theme is set by an inline <head> script
+  // (before first paint, so no flash); here we only handle the click.
   var toggle = document.querySelector('.theme-toggle');
-  var saved = localStorage.getItem('bv-theme');
-  if (saved) {
-    document.documentElement.setAttribute('data-theme', saved);
-  } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  }
   if (toggle) {
     toggle.addEventListener('click', function () {
       var current = document.documentElement.getAttribute('data-theme');
@@ -40,9 +35,10 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Tag filter pills
-  var pills = Array.from(document.querySelectorAll('.pill'));
+  var pills = Array.from(document.querySelectorAll('.filter-row .pill'));
   var cards = Array.from(document.querySelectorAll('.post-card'));
   var empty = document.getElementById('posts-empty');
+  var emptyReset = document.getElementById('posts-empty-reset');
 
   if (pills.length && cards.length) {
     function applyFilter(tag) {
@@ -54,16 +50,25 @@ document.addEventListener('DOMContentLoaded', function () {
         if (show) visible++;
       });
       pills.forEach(function (p) {
-        p.classList.toggle('active', p.getAttribute('data-tag') === tag);
+        var on = p.getAttribute('data-tag') === tag;
+        p.classList.toggle('active', on);
+        p.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
       if (empty) empty.style.display = visible === 0 ? 'block' : 'none';
     }
 
     pills.forEach(function (pill) {
+      pill.setAttribute('aria-pressed', 'false');
       pill.addEventListener('click', function () {
         applyFilter(pill.getAttribute('data-tag'));
       });
     });
+
+    if (emptyReset) {
+      emptyReset.addEventListener('click', function () {
+        applyFilter('all');
+      });
+    }
 
     applyFilter('all');
   }
