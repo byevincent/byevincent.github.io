@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>byevincent</title>
     <meta name="description" content="Security research, malware analysis, cloud IR, and tooling by Vincent Dinh.">
+    <script>(function(){try{var t=localStorage.getItem("bv-theme")||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/styles.css">
   </head>
@@ -40,13 +41,12 @@
         <button class="pill active" data-tag="all">All</button>
         <button class="pill" data-tag="tooling">Tooling</button>
         <button class="pill" data-tag="malware">Malware</button>
-        <button class="pill" data-tag="cloud-ir">Cloud IR</button>
         <button class="pill" data-tag="ad">AD</button>
       </div>
 
       <section class="card-grid" id="posts">
 
-        <article class="post-card" data-tags="tooling">
+        <article class="post-card featured" data-tags="tooling">
           <a href="/posts/sharesift-an-ml-powered-credential-hunter-for-smb-file-shares/" class="card-img-link">
             <div class="card-img" style="background:#0a1f1f;">
               <img src="/img/2026/06/sharesift-cover.png" alt="ShareSift, an ML Powered Credential Hunter for SMB File Shares" onerror="this.style.display='none'">
@@ -194,8 +194,9 @@
 
       </section>
 
-      <div class="posts-empty" id="posts-empty" style="display:none">
+      <div class="posts-empty" id="posts-empty" role="status" aria-live="polite" style="display:none">
         <p>No posts match that filter.</p>
+        <button class="pill" id="posts-empty-reset" data-tag="all">Show all posts</button>
       </div>
 
     </main>
